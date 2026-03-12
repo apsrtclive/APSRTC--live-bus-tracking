@@ -44,8 +44,14 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 CORS(app)
 
 # Absolute path for Database
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB = os.path.join(BASE_DIR, "apsrtc.db")
+if os.getenv("FLASK_ENV", "development") == "production":
+    # On Azure Linux App Services, the /home directory is tied to an Azure Storage
+    # account and persists across restarts and container rebuilds.
+    DB = "/home/apsrtc.db"
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DB = os.path.join(BASE_DIR, "apsrtc.db")
+
 
 # Auto-Initialize Database if missing
 # Auto-Initialize Database if missing
