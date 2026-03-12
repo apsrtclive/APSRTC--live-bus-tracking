@@ -27,20 +27,24 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       # ── 3. Install dependencies ───────────────────────────────────
-      - name: Install dependencies
+      - name: Create antenv and install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      # ── 4. (Optional) Run tests ───────────────────────────────────
-      # - name: Run tests
-      #   run: pytest
-
-      # ── 5. Zip artifact for deployment ───────────────────────────
-      - name: Zip deployment package
-        run: |
+          # Copy requirements into Backend so it's deployed
           cp requirements.txt Backend/
           cd Backend
+          # Create an Azure-compatible virtual environment
+          python -m venv antenv
+          source antenv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # explicitly install werkzeug (needed for ProxyFix)
+          pip install werkzeug
+          
+      # ── 4. Zip artifact for deployment ───────────────────────────
+      - name: Zip deployment package
+        run: |
+          cd Backend
+          # Include the antenv folder in the zip — Azure uses it automatically
           zip -r ../release.zip . -x "*.pyc" -x "__pycache__/*" -x ".venv/*" -x "*.db"
 
       # ── 6. Deploy to Azure App Service ───────────────────────────
