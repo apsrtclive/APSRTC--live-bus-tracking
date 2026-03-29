@@ -78,8 +78,8 @@
         // ─────────────────────────────────────────────
         const GPS_OPTIONS = {
             enableHighAccuracy: true,
-            maximumAge: 0,
-            timeout: 8000
+            maximumAge: 5000,
+            timeout: 30000
         };
 
         // ─────────────────────────────────────────────
@@ -164,9 +164,9 @@
             clearTimeout(heartbeatTimer);
             heartbeatTimer = setTimeout(() => {
                 if (!isTracking) return;
-                log("💓 Heartbeat: no GPS fix for 10 s — reinitialising watchPosition...");
+                log("💓 Heartbeat: no GPS fix for 35 s — reinitialising watchPosition...");
                 restartWatch();
-            }, 10000);
+            }, 35000);
         }
 
         function restartWatch() {
