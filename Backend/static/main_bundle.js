@@ -3,6 +3,11 @@ let trackingMap = null;
 let trackingMarker = null;
 let trackingInterval = null;
 let routeRoadPath = [];   // Stores the OSRM road-following coordinates for the current route
+let routePolyline = null;
+let lastReachedStopIndex = 0;
+let socket = null;         // WebSocket connection
+let currentTrackingService = null;  // Currently tracked service number
+let notificationSent = {};  // Track which notifications have been sent
 
 document.addEventListener("DOMContentLoaded", () => {
     initServiceVehicleSearch();
@@ -10,17 +15,212 @@ document.addEventListener("DOMContentLoaded", () => {
     initTimetableSearch();
     initRoutesView();
     loadStationsForAutocomplete();
-    initStopsMap();            // ← NEW: Bus Stop Locator
+    initStopsMap();
+    initWebSocket();
+    requestNotificationPermission();
 
     setHumanGreeting();
 
     // Version Indicator
     const brand = document.querySelector('.navbar-brand');
-    if (brand) brand.innerHTML += ' <span style="font-size:0.5em; opacity: 0.5; margin-left: 8px;">v6.0</span>';
-    console.log("APP VERSION: 6.0 PROFESSIONAL UI LOADED");
+    if (brand) brand.innerHTML += ' <span style="font-size:0.5em; opacity: 0.5; margin-left: 8px;">v7.0</span>';
+    console.log("APP VERSION: 7.0 — WebSocket + PWA + Notifications");
 });
 
-// Toast System
+
+// ═══════════════════════════════════════════════════════
+// 🔌 WEBSOCKET (Socket.IO)
+// ═══════════════════════════════════════════════════════
+
+function initWebSocket() {
+    if (typeof io === 'undefined') {
+        console.warn("[WS] Socket.IO not loaded — falling back to polling");
+        return;
+    }
+
+    try {
+        socket = io({ transports: ['websocket', 'polling'] });
+
+        socket.on('connect', () => {
+            console.log('[WS] Connected:', socket.id);
+            // Re-join tracking room if we were tracking
+            if (currentTrackingService) {
+                socket.emit('join_tracking', { service_no: currentTrackingService });
+            }
+        });
+
+        socket.on('disconnect', () => {
+            console.log('[WS] Disconnected — will auto-reconnect');
+        });
+
+        socket.on('location_update', (data) => {
+            console.log('[WS] Live update received:', data);
+            if (data.service_no === currentTrackingService) {
+                handleLiveUpdate(data);
+            }
+        });
+
+        socket.on('connect_error', (err) => {
+            console.warn('[WS] Connection error, falling back to polling:', err.message);
+        });
+
+    } catch (e) {
+        console.warn('[WS] Failed to initialize WebSocket:', e);
+    }
+}
+
+function joinTrackingRoom(serviceNo) {
+    currentTrackingService = serviceNo;
+    if (socket && socket.connected) {
+        socket.emit('join_tracking', { service_no: serviceNo });
+        console.log(`[WS] Joined room: track_${serviceNo}`);
+    }
+}
+
+function leaveTrackingRoom() {
+    if (socket && socket.connected && currentTrackingService) {
+        socket.emit('leave_tracking', { service_no: currentTrackingService });
+        console.log(`[WS] Left room: track_${currentTrackingService}`);
+    }
+    currentTrackingService = null;
+    notificationSent = {};
+}
+
+function handleLiveUpdate(liveData) {
+    // Update text info
+    const speedEl = document.getElementById("speedValue");
+    const locEl = document.getElementById("locValue");
+    const updEl = document.getElementById("updatedValue");
+
+    if (speedEl) speedEl.innerHTML = `<i class="bi bi-speedometer2"></i> ${liveData.speed} km/h`;
+    if (locEl) locEl.innerHTML = `<i class="bi bi-geo-alt"></i> ${parseFloat(liveData.lat).toFixed(4)}, ${parseFloat(liveData.lng).toFixed(4)}`;
+    if (updEl) updEl.innerHTML = `<i class="bi bi-clock-history"></i> Updated: ${liveData.updated_at.split(' ')[1] || liveData.updated_at}`;
+
+    const lat = parseFloat(liveData.lat);
+    const lng = parseFloat(liveData.lng);
+
+    // Update map marker
+    if (trackingMap) {
+        if (!trackingMarker) {
+            trackingMarker = L.marker([lat, lng], { icon: busIcon }).addTo(trackingMap)
+                .bindPopup(`<b>${liveData.service_no}</b><br>Speed: ${liveData.speed} km/h`)
+                .openPopup();
+            trackingMap.setView([lat, lng], 15);
+        } else {
+            trackingMarker.setLatLng([lat, lng]);
+            trackingMarker.setPopupContent(`<b>${liveData.service_no}</b><br>Speed: ${liveData.speed} km/h`);
+        }
+    }
+
+    // Update timeline
+    if (currentRouteStops.length > 1) {
+        updateTimelineBusPosition(lat, lng);
+    }
+
+    // Update ETA
+    updateETADisplay(liveData.service_no);
+
+    // Check notifications
+    checkStopNotifications(lat, lng);
+}
+
+
+// ═══════════════════════════════════════════════════════
+// 🔔 NOTIFICATION SYSTEM
+// ═══════════════════════════════════════════════════════
+
+function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        // Don't immediately ask — wait for user interaction
+        console.log('[Notify] Permission will be requested when user selects a destination stop');
+    }
+}
+
+async function askNotificationPermission() {
+    if (!('Notification' in window)) {
+        console.warn('[Notify] Browser does not support notifications');
+        return false;
+    }
+    if (Notification.permission === 'granted') return true;
+    if (Notification.permission === 'denied') return false;
+
+    const perm = await Notification.requestPermission();
+    return perm === 'granted';
+}
+
+function sendBusNotification(title, body) {
+    if (Notification.permission === 'granted') {
+        const notif = new Notification(title, {
+            body: body,
+            icon: '/static/icons/icon-192.png',
+            badge: '/static/icons/icon-192.png',
+            vibrate: [200, 100, 200],
+            tag: 'bus-proximity',
+            renotify: true
+        });
+        // Also show a toast
+        showToast(body, 'success');
+    }
+}
+
+function checkStopNotifications(busLat, busLng) {
+    const destSelect = document.getElementById('destinationStopSelect');
+    if (!destSelect || !destSelect.value || currentRouteStops.length < 2) return;
+
+    const destStopName = destSelect.value;
+
+    // Find bus position in route
+    let closestIdx = 0;
+    let minDist = Infinity;
+    for (let i = 0; i < currentRouteStops.length; i++) {
+        const d = getDistance(busLat, busLng, currentRouteStops[i].lat, currentRouteStops[i].lng);
+        if (d < minDist) { minDist = d; closestIdx = i; }
+    }
+
+    // Find destination stop index
+    let destIdx = -1;
+    for (let i = 0; i < currentRouteStops.length; i++) {
+        if (currentRouteStops[i].name === destStopName) { destIdx = i; break; }
+    }
+    if (destIdx === -1) return;
+
+    const stopsAway = destIdx - closestIdx;
+
+    // Update stops-away indicator
+    const stopsAwayEl = document.getElementById('stopsAwayIndicator');
+    if (stopsAwayEl) {
+        if (stopsAway > 0) {
+            stopsAwayEl.innerHTML = `<i class="bi bi-geo-alt-fill"></i> <b>${stopsAway}</b> stop${stopsAway > 1 ? 's' : ''} away from ${destStopName}`;
+            stopsAwayEl.style.display = 'block';
+        } else if (stopsAway === 0) {
+            stopsAwayEl.innerHTML = `<i class="bi bi-check-circle-fill text-success"></i> <b>Arrived</b> at ${destStopName}!`;
+            stopsAwayEl.style.display = 'block';
+        } else {
+            stopsAwayEl.innerHTML = `<i class="bi bi-arrow-left-circle"></i> Bus has passed ${destStopName}`;
+            stopsAwayEl.style.display = 'block';
+        }
+    }
+
+    // Send notifications at 2 stops and 1 stop away
+    if (stopsAway === 2 && !notificationSent['2stops']) {
+        notificationSent['2stops'] = true;
+        sendBusNotification('🚌 Bus Approaching!', `Bus is 2 stops away from ${destStopName}. Get ready!`);
+    }
+    if (stopsAway === 1 && !notificationSent['1stop']) {
+        notificationSent['1stop'] = true;
+        sendBusNotification('🚌 Almost There!', `Bus is 1 stop away from ${destStopName}. Please prepare to board!`);
+    }
+    if (stopsAway === 0 && !notificationSent['arrived']) {
+        notificationSent['arrived'] = true;
+        sendBusNotification('🚌 Bus Arrived!', `Bus has arrived at ${destStopName}!`);
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════
+// 🍞 TOAST SYSTEM
+// ═══════════════════════════════════════════════════════
+
 function showToast(message, type = 'success') {
     const container = document.getElementById('toastContainer');
     if (!container) return;
@@ -38,15 +238,17 @@ function showToast(message, type = 'success') {
     `;
 
     container.appendChild(toast);
-
-    // Auto remove after 5 seconds
     setTimeout(() => {
         toast.style.animation = 'fadeOutRight 0.3s forwards';
         setTimeout(() => toast.remove(), 300);
     }, 5000);
 }
 
-// Dynamic Human Greeting
+
+// ═══════════════════════════════════════════════════════
+// 🌅 GREETING & SKELETON
+// ═══════════════════════════════════════════════════════
+
 function setHumanGreeting() {
     const header = document.getElementById("greetingHeader");
     if (!header) return;
@@ -57,10 +259,9 @@ function setHumanGreeting() {
     header.innerText = greeting;
 }
 
-// Skeleton Generator
 function getSkeletonHTML(count = 1) {
     let html = '';
-    for(let i=0; i<count; i++) {
+    for (let i = 0; i < count; i++) {
         html += `
             <div class="skeleton-card">
                 <div class="skeleton skeleton-title"></div>
@@ -73,13 +274,10 @@ function getSkeletonHTML(count = 1) {
 }
 
 
-// ---------------------------
-// SERVICE / VEHICLE SEARCH
-// ---------------------------
+// ═══════════════════════════════════════════════════════
+// 🔍 SERVICE / VEHICLE SEARCH + LIVE TRACKING
+// ═══════════════════════════════════════════════════════
 
-// ---------------------------
-// SERVICE / VEHICLE SEARCH
-// ---------------------------
 function initServiceVehicleSearch() {
     const searchBtn = document.getElementById("searchBtn");
     const resultBox = document.getElementById("trackingResult");
@@ -94,14 +292,14 @@ function initServiceVehicleSearch() {
             return;
         }
 
-        // Clear previous interval if any
+        // Clear previous tracking
         if (trackingInterval) clearInterval(trackingInterval);
+        leaveTrackingRoom();
 
         resultBox.innerHTML = getSkeletonHTML(1);
 
         try {
             let url = "";
-
             if (type === "service") {
                 url = `${API_BASE}/api/service/${searchInput}`;
             } else {
@@ -109,7 +307,6 @@ function initServiceVehicleSearch() {
             }
 
             const response = await fetch(url);
-
             if (!response.ok) {
                 resultBox.innerHTML = '';
                 showToast("Not found in database", "error");
@@ -143,6 +340,33 @@ function initServiceVehicleSearch() {
                             </div>
                         </div>
 
+                        <!-- ETA Display -->
+                        <div class="eta-display mt-3 p-3 rounded-3" id="etaDisplay" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="small text-muted fw-bold">ETA</div>
+                                    <div class="eta-time" id="etaTime">-- min</div>
+                                </div>
+                                <div class="text-end">
+                                    <div class="small text-muted fw-bold">DISTANCE</div>
+                                    <div class="eta-distance" id="etaDistance">-- km</div>
+                                </div>
+                                <div class="text-end">
+                                    <div class="small text-muted fw-bold">STOPS</div>
+                                    <div class="eta-stops" id="etaStops">--</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Destination Stop Selector + Notification -->
+                        <div class="mt-3" id="destSelectWrapper" style="display: none;">
+                            <label class="form-label small text-muted fw-bold">🔔 NOTIFY ME AT</label>
+                            <select id="destinationStopSelect" class="form-select form-select-sm" onchange="onDestinationSelected()">
+                                <option value="">Select destination stop...</option>
+                            </select>
+                            <div id="stopsAwayIndicator" class="stops-away-badge mt-2" style="display: none;"></div>
+                        </div>
+
                         <!-- TIMELINE VS MAP TOGGLE -->
                         <div class="d-flex justify-content-center mt-3 mb-3">
                             <div class="btn-group btn-group-sm" role="group">
@@ -171,6 +395,12 @@ function initServiceVehicleSearch() {
                         <!-- MAP CONTAINER (Hidden initially) -->
                         <div id="mapContainer" style="display: none;">
                             <div id="map" style="height: 400px; width: 100%; border-radius: 8px; z-index: 1;"></div>
+                        </div>
+
+                        <!-- ROUTE STOPS PANEL -->
+                        <div class="tracking-stops-panel mt-3" id="trackingStopsPanel" style="display: none;">
+                            <h6 class="fw-bold mb-2" style="color: var(--primary-color);"><i class="bi bi-geo-alt"></i> Route Stops</h6>
+                            <div id="trackingStopsList" class="tracking-stops-list"></div>
                         </div>
                     </div>
                 `;
@@ -202,19 +432,17 @@ function initServiceVehicleSearch() {
     });
 }
 
-let currentRouteStops = []; // Store stops globally for logic processing
+let currentRouteStops = [];
 
 // Toggle View Helper
-window.toggleTrackingView = function(view) {
+window.toggleTrackingView = function (view) {
     if (view === 'timeline') {
         document.getElementById('timelineContainer').style.display = 'block';
         document.getElementById('mapContainer').style.display = 'none';
     } else {
         document.getElementById('timelineContainer').style.display = 'none';
         document.getElementById('mapContainer').style.display = 'block';
-        if (trackingMap) {
-            trackingMap.invalidateSize(); // Fix leafet rendering issue when unhidden
-        }
+        if (trackingMap) trackingMap.invalidateSize();
     }
 };
 
@@ -223,31 +451,36 @@ async function startLiveMap(serviceNo) {
     document.getElementById('timelineLoading').style.display = 'block';
     document.getElementById('routeTimelineGrid').style.display = 'none';
     currentRouteStops = [];
+    notificationSent = {};
 
-    // 1. Initialize Map Container immediately
+    // 1. Initialize Map Container
     if (trackingMap) {
         trackingMap.off();
         trackingMap.remove();
         trackingMap = null;
     }
-    trackingMarker = null; // CRITICAL: reset so marker is re-added to the NEW map
+    trackingMarker = null;
 
-    // Default center (Vizag) before we get data
     trackingMap = L.map('map').setView([17.6868, 83.2185], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap'
     }).addTo(trackingMap);
 
-    // 2. Fetch and Plot Route (Map & Timeline)
+    // 2. Fetch and Plot Route
     await drawRouteOnMap(serviceNo);
 
-    // 3. Initial Live Location Check
+    // 3. Join WebSocket room
+    joinTrackingRoom(serviceNo);
+
+    // 4. Initial Live Location Check
     await updateMapLocation(serviceNo);
 
-    // 4. Start Polling
+    // 5. Fallback polling (in case WebSocket fails or is unavailable)
     trackingInterval = setInterval(() => {
-        updateMapLocation(serviceNo);
-    }, 3000);
+        if (!socket || !socket.connected) {
+            updateMapLocation(serviceNo);
+        }
+    }, 5000);
 }
 
 // Custom Bus Icon for Leaflet
@@ -260,25 +493,17 @@ const busIcon = L.icon({
 
 // Haversine Distance Formula (km)
 function getDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371; 
+    const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
 }
 
-// ---------------------------
-// 🛣️ OSRM ROAD-NETWORK HELPER
-// ---------------------------
-
-/**
- * Fetches a road-following path from the public OSRM demo server.
- * @param {Array} waypoints  Array of [lat, lng] pairs (stop coordinates)
- * @returns {Array|null}     Array of [lat, lng] for the road path, or null on failure
- */
+// OSRM Road-Network Helper
 async function fetchOsrmRoute(waypoints) {
     try {
         const coordStr = waypoints.map(([lat, lng]) => `${lng},${lat}`).join(';');
@@ -290,8 +515,7 @@ async function fetchOsrmRoute(waypoints) {
         const data = await res.json();
         if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) return null;
 
-        const roadCoords = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-        return roadCoords;
+        return data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
     } catch (err) {
         return null;
     }
@@ -299,20 +523,18 @@ async function fetchOsrmRoute(waypoints) {
 
 async function drawRouteOnMap(serviceNo) {
     try {
+        lastReachedStopIndex = 0; // Reset for new route
         const res = await fetch(`${API_BASE}/api/route_details/${serviceNo}`);
         if (!res.ok) return;
 
         const stops = await res.json();
         if (!stops || stops.length === 0) return;
 
-        currentRouteStops = stops; // Save for timeline calc
+        currentRouteStops = stops;
 
-        // -----------------------------
-        // Populate Linear Timeline UI
-        // -----------------------------
+        // ── Populate Timeline UI ──
         const timelineWrapper = document.getElementById('timelineStopsWrapper');
         let timelineHTML = '';
-        
         stops.forEach((stop, index) => {
             const isTerm = (index === 0 || index === stops.length - 1) ? 'terminal' : '';
             timelineHTML += `
@@ -323,14 +545,24 @@ async function drawRouteOnMap(serviceNo) {
                 </div>
             `;
         });
-        
         timelineWrapper.innerHTML = timelineHTML;
         document.getElementById('timelineLoading').style.display = 'none';
         document.getElementById('routeTimelineGrid').style.display = 'block';
 
-        // -----------------------------
-        // Render Geographic Map
-        // -----------------------------
+        // ── Populate Destination Stop Selector ──
+        const destSelect = document.getElementById('destinationStopSelect');
+        if (destSelect) {
+            destSelect.innerHTML = '<option value="">Select destination stop...</option>';
+            stops.forEach((stop, idx) => {
+                destSelect.innerHTML += `<option value="${stop.name}">${stop.name}${idx === 0 || idx === stops.length - 1 ? ' (Terminal)' : ''}</option>`;
+            });
+            document.getElementById('destSelectWrapper').style.display = 'block';
+        }
+
+        // ── Populate Tracking Stops Panel ──
+        renderTrackingStopsPanel(stops);
+
+        // ── Render Geographic Map ──
         const stopCoords = stops.map(s => [s.lat, s.lng]);
         const roadPath = await fetchOsrmRoute(stopCoords);
 
@@ -342,31 +574,32 @@ async function drawRouteOnMap(serviceNo) {
             L.polyline(stopCoords, { color: 'blue', weight: 4, opacity: 0.7, dashArray: '8, 8' }).addTo(trackingMap);
         }
 
-        // --- Add Stop Markers ---
-        const smallBusIcon = L.icon({
-            iconUrl: 'https://img.icons8.com/m_outlined/200/bus.png', // Small simple bus icon
-            iconSize: [20, 20],
-            iconAnchor: [10, 10], // Center of 20x20
+        // ── Add Stop Markers with Labels ──
+        const terminalIcon = new L.Icon.Default();
+        const stopIcon = L.divIcon({
+            className: '',
+            html: `<div style="width:14px;height:14px;background:#1a73e8;border:2px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>`,
+            iconSize: [14, 14],
+            iconAnchor: [7, 7],
             popupAnchor: [0, -10]
         });
 
-        // Use standard blue marker for start and end terminals
-        const terminalIcon = new L.Icon.Default();
-
         stops.forEach((stop, i) => {
             const isTerminal = (i === 0 || i === stops.length - 1);
-            
-            if (isTerminal) {
-                // Pin marker for start and end stops
-                L.marker([stop.lat, stop.lng], { icon: terminalIcon })
-                 .addTo(trackingMap)
-                 .bindPopup(`🚏 <b>${stop.name}</b> (Terminal)`);
-            } else {
-                // Small bus icon for intermediate stops
-                L.marker([stop.lat, stop.lng], { icon: smallBusIcon })
-                 .addTo(trackingMap)
-                 .bindPopup(`🚏 <b>${stop.name}</b>`);
-            }
+            const icon = isTerminal ? terminalIcon : stopIcon;
+
+            const marker = L.marker([stop.lat, stop.lng], { icon })
+                .addTo(trackingMap)
+                .bindPopup(`🚏 <b>${stop.name}</b>${isTerminal ? ' (Terminal)' : ''}<br><small>Stop ${i + 1}</small>`);
+
+            // Add permanent label for all stops on map
+            L.marker([stop.lat, stop.lng], {
+                icon: L.divIcon({
+                    className: 'stop-map-label',
+                    html: `<span>${stop.name}</span>`,
+                    iconAnchor: [-10, 6]
+                })
+            }).addTo(trackingMap);
         });
 
         trackingMap.fitBounds(roadPath && roadPath.length > 1 ? roadPath : stopCoords);
@@ -376,44 +609,124 @@ async function drawRouteOnMap(serviceNo) {
     }
 }
 
+function renderTrackingStopsPanel(stops) {
+    const panel = document.getElementById('trackingStopsPanel');
+    const list = document.getElementById('trackingStopsList');
+    if (!panel || !list) return;
+
+    let html = '';
+    stops.forEach((stop, idx) => {
+        const isTerminal = (idx === 0 || idx === stops.length - 1);
+        html += `
+            <div class="tracking-stop-item ${isTerminal ? 'terminal' : ''}" id="tracking-stop-${idx}">
+                <div class="tracking-stop-dot"></div>
+                <div class="tracking-stop-info">
+                    <div class="tracking-stop-name">${stop.name}</div>
+                    <div class="tracking-stop-meta">Stop ${idx + 1}${isTerminal ? ' • Terminal' : ''}</div>
+                </div>
+                <div class="tracking-stop-dist" id="tracking-stop-dist-${idx}">--</div>
+            </div>
+        `;
+    });
+    list.innerHTML = html;
+    panel.style.display = 'block';
+}
+
+function updateTrackingStopsDistances(busLat, busLng) {
+    if (!currentRouteStops.length) return;
+
+    let closestIdx = 0;
+    let minDist = Infinity;
+
+    currentRouteStops.forEach((stop, idx) => {
+        const dist = getDistance(busLat, busLng, stop.lat, stop.lng);
+        const distEl = document.getElementById(`tracking-stop-dist-${idx}`);
+        if (distEl) {
+            distEl.textContent = dist < 1 ? `${(dist * 1000).toFixed(0)}m` : `${dist.toFixed(1)}km`;
+        }
+
+        if (dist < minDist) {
+            minDist = dist;
+            closestIdx = idx;
+        }
+
+        // Remove previous highlight
+        const itemEl = document.getElementById(`tracking-stop-${idx}`);
+        if (itemEl) itemEl.classList.remove('nearest');
+    });
+
+    // Highlight nearest stop
+    const nearestEl = document.getElementById(`tracking-stop-${closestIdx}`);
+    if (nearestEl) {
+        nearestEl.classList.add('nearest');
+        nearestEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+async function onDestinationSelected() {
+    const destSelect = document.getElementById('destinationStopSelect');
+    if (!destSelect || !destSelect.value) return;
+
+    // Request notification permission when user selects a destination
+    const granted = await askNotificationPermission();
+    if (granted) {
+        showToast(`🔔 Notifications enabled for ${destSelect.value}`, 'success');
+    }
+    notificationSent = {}; // Reset notifications for new destination
+}
+window.onDestinationSelected = onDestinationSelected;
+
+
+// ── ETA Display ──
+
+async function updateETADisplay(serviceNo) {
+    try {
+        const destSelect = document.getElementById('destinationStopSelect');
+        let etaUrl = `${API_BASE}/api/eta/${serviceNo}`;
+        if (destSelect && destSelect.value) {
+            etaUrl += `?destination=${encodeURIComponent(destSelect.value)}`;
+        }
+
+        const res = await fetch(etaUrl);
+        if (!res.ok) return;
+
+        const eta = await res.json();
+        const display = document.getElementById('etaDisplay');
+        if (display) {
+            display.style.display = 'block';
+            if (eta.bus_status === 'At Station') {
+                document.getElementById('etaTime').innerHTML = `<span class="text-success fw-bold" style="font-size: 1.2rem;">Reached</span><br><small class="text-muted d-block" style="line-height: 1;">${eta.closest_stop}</small>`;
+                document.getElementById('etaDistance').textContent = `--`;
+            } else if (eta.bus_status === 'Approaching') {
+                document.getElementById('etaTime').innerHTML = `<span class="text-warning fw-bold" style="font-size: 1.2rem;">Approaching</span><br><small class="text-muted d-block" style="line-height: 1;">${eta.closest_stop}</small>`;
+                document.getElementById('etaDistance').textContent = `${eta.remaining_distance_km} km`;
+            } else {
+                document.getElementById('etaTime').innerHTML = `${eta.eta_minutes} min`;
+                document.getElementById('etaDistance').textContent = `${eta.remaining_distance_km} km`;
+            }
+            document.getElementById('etaStops').textContent = eta.stops_remaining;
+        }
+    } catch (e) {
+        console.error('ETA update error:', e);
+    }
+}
+
+
 async function updateMapLocation(serviceNo) {
     try {
         const res = await fetch(`${API_BASE}/api/live/${serviceNo}?t=${Date.now()}`);
         if (!res.ok) {
-            document.getElementById("updatedValue").innerHTML = `<i class="bi bi-clock-history"></i> Status: Waiting for driver...`;
+            const updEl = document.getElementById("updatedValue");
+            if (updEl) updEl.innerHTML = `<i class="bi bi-clock-history"></i> Status: Waiting for driver...`;
             return;
         }
 
         const liveData = await res.json();
+        liveData.service_no = serviceNo;
+        handleLiveUpdate(liveData);
 
-        // Update Text Info
-        document.getElementById("speedValue").innerHTML = `<i class="bi bi-speedometer2"></i> ${liveData.speed} km/h`;
-        document.getElementById("locValue").innerHTML = `<i class="bi bi-geo-alt"></i> ${liveData.lat.toFixed(4)}, ${liveData.lng.toFixed(4)}`;
-        document.getElementById("updatedValue").innerHTML = `<i class="bi bi-clock-history"></i> Updated: ${liveData.updated_at.split(' ')[1]}`;
-
-        const lat = liveData.lat;
-        const lng = liveData.lng;
-
-        // --------------------------------
-        // Update Geographical Map Marker
-        // --------------------------------
-        if (!trackingMarker) {
-            trackingMarker = L.marker([lat, lng], {icon: busIcon}).addTo(trackingMap)
-                .bindPopup(`<b>${serviceNo}</b><br>Speed: ${liveData.speed} km/h`)
-                .openPopup();
-            trackingMap.setView([lat, lng], 15);
-        } else {
-            trackingMarker.setLatLng([lat, lng]);
-            trackingMarker.setPopupContent(`<b>${serviceNo}</b><br>Speed: ${liveData.speed} km/h`);
-            // trackingMap.panTo([lat, lng]); // Optional: uncomment if you want map to force pan
-        }
-
-        // --------------------------------
-        // Update Linear Timeline Progress
-        // --------------------------------
-        if (currentRouteStops.length > 1) {
-            updateTimelineBusPosition(lat, lng);
-        }
+        // Update stops panel distances
+        updateTrackingStopsDistances(parseFloat(liveData.lat), parseFloat(liveData.lng));
 
     } catch (err) {
         console.error("Tracking Error:", err);
@@ -423,7 +736,6 @@ async function updateMapLocation(serviceNo) {
 function updateTimelineBusPosition(currentLat, currentLng) {
     if (currentRouteStops.length < 2) return;
 
-    // Find the closest stop to determine segment
     let minDistance = Infinity;
     let closestIndex = 0;
 
@@ -435,48 +747,71 @@ function updateTimelineBusPosition(currentLat, currentLng) {
         }
     }
 
-    // Determine if bus is heading to next or previous stop logically
-    let segmentStartIndex = closestIndex;
-    let segmentEndIndex = closestIndex + 1;
+    let reachedIndex = 0;
 
-    // Boundary check
-    if (closestIndex === currentRouteStops.length - 1) {
-        segmentStartIndex = closestIndex - 1;
-        segmentEndIndex = closestIndex;
+    // Determine the exact segment the bus is in
+    if (closestIndex === 0) {
+        reachedIndex = (minDistance < 0.3) ? 0 : 0;
+    } else if (closestIndex === currentRouteStops.length - 1) {
+        reachedIndex = (minDistance < 0.3) ? closestIndex : closestIndex - 1;
+    } else {
+        // Bus is somewhere in the middle. Compare prev and next to see which side of closestIndex it's on
+        let distPrev = getDistance(currentLat, currentLng, currentRouteStops[closestIndex - 1].lat, currentRouteStops[closestIndex - 1].lng);
+        let distNext = getDistance(currentLat, currentLng, currentRouteStops[closestIndex + 1].lat, currentRouteStops[closestIndex + 1].lng);
+
+        if (minDistance < 0.3) {
+            reachedIndex = closestIndex; // It physically reached closestIndex
+        } else if (distNext < distPrev) {
+            // It is between closestIndex and next. So it has passed closestIndex
+            reachedIndex = closestIndex;
+        } else {
+            // It is between prev and closestIndex. So it has passed prev.
+            reachedIndex = closestIndex - 1;
+        }
     }
 
-    // Mathematical progression percentage between the two stops
-    let startStop = currentRouteStops[segmentStartIndex];
-    let endStop = currentRouteStops[segmentEndIndex];
+    // Keep the timeline moving forward, don't jump backward purely due to GPS bounce
+    lastReachedStopIndex = Math.max(lastReachedStopIndex, reachedIndex);
 
-    let distToStart = getDistance(currentLat, currentLng, startStop.lat, startStop.lng);
-    let distToEnd = getDistance(currentLat, currentLng, endStop.lat, endStop.lng);
-    let segmentTotalDist = getDistance(startStop.lat, startStop.lng, endStop.lat, endStop.lng);
-
-    // Guard against 0 division if stops are identical
-    if (segmentTotalDist === 0) segmentTotalDist = 0.0001; 
-
-    // Calculate percentage (0.0 to 1.0) along the segment 
-    let progress = distToStart / (distToStart + distToEnd);
-    if (progress > 1) progress = 1;
-    if (progress < 0) progress = 0;
-
-    // Map the progress to literal CSS 'top' value in the timeline 
-    // Each stop visually takes up standard space (80px height per stop block)
     const blocksCount = currentRouteStops.length - 1;
     const basePercentagePerBlock = 100 / blocksCount;
 
-    const blockStartPercent = segmentStartIndex * basePercentagePerBlock;
-    const currentProgressPercent = blockStartPercent + (progress * basePercentagePerBlock);
+    // Bus icon precisely hops from junction to junction
+    const currentProgressPercent = lastReachedStopIndex * basePercentagePerBlock;
+    const busTrackerIcon = document.getElementById('busTrackerIcon');
+    if (busTrackerIcon) {
+        busTrackerIcon.style.top = `calc(${currentProgressPercent}% - 25px)`;
+        // Optional: add a smooth transition so it slides to the hop
+        busTrackerIcon.style.transition = 'top 1s ease-in-out';
+    }
 
-    // Apply smooth CSS transition
-    document.getElementById('busTrackerIcon').style.top = `calc(${currentProgressPercent}% - 25px)`;
+    // Style the timeline junction nodes based on reach status
+    for (let i = 0; i < currentRouteStops.length; i++) {
+        const stopEl = document.getElementById(`stop-${i}`);
+        if (!stopEl) continue;
+        const node = stopEl.querySelector('.stop-node');
+        if (node) {
+            if (i <= lastReachedStopIndex) {
+                node.style.background = '#00A859';
+                node.style.borderColor = '#00A859';
+                if (i === lastReachedStopIndex) {
+                    node.style.boxShadow = '0 0 0 4px rgba(0, 168, 89, 0.2)';
+                } else {
+                    node.style.boxShadow = 'none';
+                }
+            } else {
+                node.style.background = '#fff';
+                node.style.borderColor = '#ccc';
+                node.style.boxShadow = 'none';
+            }
+        }
+    }
 }
 
 
-// ---------------------------
+// ═══════════════════════════════════════════════════════
 // 🎟️ TICKET SEARCH (FROM - TO)
-// ---------------------------
+// ═══════════════════════════════════════════════════════
 
 function initTicketSearch() {
     const ticketForm = document.getElementById("ticketForm");
@@ -493,25 +828,14 @@ function initTicketSearch() {
 
         try {
             let url = `${API_BASE}/api/search?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
-
-            if (service) {
-                url += `&service=${encodeURIComponent(service)}`;
-            }
+            if (service) url += `&service=${encodeURIComponent(service)}`;
 
             const response = await fetch(url);
-            
-            if (!response.ok) {
-                resultBox.innerHTML = '';
-                showToast("Failed to fetch tickets", "error");
-                return;
-            }
-            
+            if (!response.ok) { resultBox.innerHTML = ''; showToast("Failed to fetch tickets", "error"); return; }
+
             const data = await response.json();
 
             if (!Array.isArray(data) || data.length === 0) {
-                resultBox.innerHTML = '';
-                showToast("No buses found", "warning");
-                // Beautiful empty state for no tickets
                 resultBox.innerHTML = `
                     <div class="text-center p-5 bg-white rounded-3 shadow-sm border border-light mt-3 fade-in">
                         <i class="bi bi-compass text-muted" style="font-size: 3.5rem; opacity: 0.3;"></i>
@@ -519,11 +843,11 @@ function initTicketSearch() {
                         <p class="text-muted small">Try selecting different stops or removing the service filter.</p>
                     </div>
                 `;
+                showToast("No buses found", "warning");
                 return;
             }
 
             let html = "";
-
             data.forEach(bus => {
                 html += `
                     <div class="bus-card fade-in">
@@ -543,7 +867,6 @@ function initTicketSearch() {
                     </div>
                 `;
             });
-
             resultBox.innerHTML = html;
 
         } catch (error) {
@@ -555,41 +878,29 @@ function initTicketSearch() {
 }
 
 
-// ---------------------------
+// ═══════════════════════════════════════════════════════
 // 🕒 TIMETABLE SEARCH
-// ---------------------------
+// ═══════════════════════════════════════════════════════
+
 function initTimetableSearch() {
     const timetableForm = document.getElementById("timetableForm");
 
     timetableForm.addEventListener("submit", async (e) => {
         e.preventDefault();
-
         const from = document.getElementById("timetableFrom").value.trim();
         const to = document.getElementById("timetableTo").value.trim();
-
         const resultBox = document.getElementById("timetableResult");
         resultBox.innerHTML = getSkeletonHTML(2);
 
         try {
             const url = `${API_BASE}/api/timetable?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
             const response = await fetch(url);
-            
-            if (!response.ok) {
-                resultBox.innerHTML = '';
-                showToast("Failed to fetch timetable", "error");
-                return;
-            }
-            
-            const data = await response.json();
+            if (!response.ok) { resultBox.innerHTML = ''; showToast("Failed to fetch timetable", "error"); return; }
 
-            if (!Array.isArray(data) || data.length === 0) {
-                resultBox.innerHTML = '';
-                showToast("No timetable found for this route", "warning");
-                return;
-            }
+            const data = await response.json();
+            if (!Array.isArray(data) || data.length === 0) { resultBox.innerHTML = ''; showToast("No timetable found", "warning"); return; }
 
             let html = "";
-
             data.forEach(t => {
                 html += `
                     <div class="bus-card fade-in" style="border-left-color: #333;">
@@ -599,15 +910,11 @@ function initTimetableSearch() {
                                 <i class="bi bi-clock"></i> ${t.arrival_time}
                             </span>
                         </div>
-                        <div class="vehicle-info">
-                            Expected Arrival at ${from}
-                        </div>
+                        <div class="vehicle-info">Expected Arrival at ${from}</div>
                     </div>
                 `;
             });
-
             resultBox.innerHTML = html;
-
         } catch (error) {
             console.error(error);
             resultBox.innerHTML = '';
@@ -617,9 +924,10 @@ function initTimetableSearch() {
 }
 
 
-// ---------------------------
+// ═══════════════════════════════════════════════════════
 // 🛣️ VIEW ALL ROUTES
-// ---------------------------
+// ═══════════════════════════════════════════════════════
+
 function initRoutesView() {
     const viewRoutesBtn = document.getElementById("viewRoutesBtn");
     const routesResult = document.getElementById("routesResult");
@@ -637,20 +945,10 @@ function initRoutesView() {
 
         try {
             const response = await fetch(`${API_BASE}/api/routes`);
-            
-            if (!response.ok) {
-                routesResult.innerHTML = '';
-                showToast("Failed to load routes", "error");
-                return;
-            }
-            
-            const data = await response.json();
+            if (!response.ok) { routesResult.innerHTML = ''; showToast("Failed to load routes", "error"); return; }
 
-            if (!Array.isArray(data) || data.length === 0) {
-                routesResult.innerHTML = '';
-                showToast("No routes found", "warning");
-                return;
-            }
+            const data = await response.json();
+            if (!Array.isArray(data) || data.length === 0) { routesResult.innerHTML = ''; showToast("No routes found", "warning"); return; }
 
             let html = "";
             data.forEach(r => {
@@ -666,7 +964,6 @@ function initRoutesView() {
                 `;
             });
             routesResult.innerHTML = html;
-
         } catch (error) {
             console.error(error);
             routesResult.innerHTML = '';
@@ -676,57 +973,50 @@ function initRoutesView() {
 }
 
 
-// ---------------------------
+// ═══════════════════════════════════════════════════════
 // 🔍 AUTOCOMPLETE STATIONS
-// ---------------------------
+// ═══════════════════════════════════════════════════════
+
 async function loadStationsForAutocomplete() {
     try {
         const response = await fetch(`${API_BASE}/api/stations`);
         const stations = await response.json();
-
         const datalist = document.getElementById("stationList");
         datalist.innerHTML = "";
-
         stations.forEach(station => {
             const option = document.createElement("option");
             option.value = station;
             datalist.appendChild(option);
         });
-
     } catch (error) {
         console.error("Failed to load stations for autocomplete", error);
     }
 }
 
 
-// =============================================
+// ═══════════════════════════════════════════════════════
 // 🚏 BUS STOP LOCATOR — Visakhapatnam Map
-// =============================================
+// ═══════════════════════════════════════════════════════
 
-// Colour palette for each route — easy to extend
 const ROUTE_COLORS = {
-    '28A':  '#1a73e8',   // Google Blue
-    '6K':   '#e8300a',   // Red
-    '400K': '#8e24aa',   // Purple
+    '28A': '#1a73e8',
+    '6K': '#e8300a',
+    '400K': '#8e24aa',
 };
 
-// Service metadata (labels for the popup / list)
 const ROUTE_META = {
-    '28A':  { label: '28A', route: 'Gajuwaka → Beach Road' },
-    '6K':   { label: '6K',  route: 'Maddilapalem → Simhachalam' },
+    '28A': { label: '28A', route: 'Gajuwaka → Beach Road' },
+    '6K': { label: '6K', route: 'Maddilapalem → Simhachalam' },
     '400K': { label: '400K', route: 'RTC Complex → Railway Stn' },
 };
 
 let stopsMap = null;
-let stopsLayerGroups = {};   // { '28A': L.layerGroup, '6K': ..., ... }
+let stopsLayerGroups = {};
 let userLocationMarker = null;
 
-/**
- * Build a coloured circular marker icon (no external image needed)
- */
 function makeStopIcon(color, isTerminal) {
-    const size    = isTerminal ? 18 : 13;
-    const border  = isTerminal ? 3  : 2;
+    const size = isTerminal ? 18 : 13;
+    const border = isTerminal ? 3 : 2;
     return L.divIcon({
         className: '',
         html: `<div style="
@@ -741,45 +1031,88 @@ function makeStopIcon(color, isTerminal) {
     });
 }
 
-/**
- * Initialise the Vizag stops map and load all route stops.
- */
 async function initStopsMap() {
     const mapEl = document.getElementById('stopsMap');
     if (!mapEl) return;
 
-    // Centre on Visakhapatnam city centre
     stopsMap = L.map('stopsMap', { zoomControl: true }).setView([17.6868, 83.2185], 13);
 
-    // Use CartoDB Light (clean, readable — perfect for a transit app)
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap contributors',
         subdomains: 'abcd',
         maxZoom: 19
     }).addTo(stopsMap);
 
-    // Load stops for all known services
-    const services = Object.keys(ROUTE_META);
-    for (const svc of services) {
-        await loadStopsLayer(svc);
-    }
+    // Load stops for all known services + dynamically from API
+    await loadDynamicRoutes();
 
-    // Show all routes initially
     renderStopListAll();
 
-    // Wire up route filter dropdown
     const filterEl = document.getElementById('stopsRouteFilter');
     if (filterEl) {
         filterEl.addEventListener('change', () => {
-            const selected = filterEl.value;
-            applyRouteFilter(selected);
+            applyRouteFilter(filterEl.value);
         });
     }
 }
 
-/**
- * Fetch stop data for one service and build its layer group.
- */
+async function loadDynamicRoutes() {
+    try {
+        // Fetch all routes from API to dynamically populate
+        const res = await fetch(`${API_BASE}/api/routes`);
+        if (!res.ok) return;
+        const routes = await res.json();
+
+        // Update filter dropdown
+        const filterEl = document.getElementById('stopsRouteFilter');
+        if (filterEl) {
+            filterEl.innerHTML = '<option value="all">All Routes</option>';
+            
+            // Also fetch services to match
+            const svcRes = await fetch(`${API_BASE}/api/search?from=&to=`);
+            const services = svcRes.ok ? await svcRes.json() : [];
+
+            for (const route of routes) {
+                // Find service_no for this route
+                const svc = services.find(s => s.route_name === route.route_name);
+                const serviceNo = svc ? svc.service_no : null;
+
+                if (serviceNo) {
+                    filterEl.innerHTML += `<option value="${serviceNo}">${serviceNo} — ${route.route_name}</option>`;
+
+                    // Set dynamic color/meta if not predefined
+                    if (!ROUTE_COLORS[serviceNo]) {
+                        const hue = (Object.keys(ROUTE_COLORS).length * 137) % 360;
+                        ROUTE_COLORS[serviceNo] = `hsl(${hue}, 70%, 50%)`;
+                    }
+                    if (!ROUTE_META[serviceNo]) {
+                        ROUTE_META[serviceNo] = { label: serviceNo, route: route.route_name };
+                    }
+
+                    await loadStopsLayer(serviceNo);
+                } else {
+                    // fallback: use route name
+                    filterEl.innerHTML += `<option value="${route.route_name}">${route.route_name}</option>`;
+                }
+            }
+        }
+
+        // Also load predefined services in case they weren't in the API response
+        const predefined = Object.keys(ROUTE_META);
+        for (const svc of predefined) {
+            if (!stopsLayerGroups[svc]) {
+                await loadStopsLayer(svc);
+            }
+        }
+    } catch (e) {
+        console.error('Error loading dynamic routes:', e);
+        // Fallback: load predefined only
+        for (const svc of Object.keys(ROUTE_META)) {
+            if (!stopsLayerGroups[svc]) await loadStopsLayer(svc);
+        }
+    }
+}
+
 async function loadStopsLayer(serviceNo) {
     try {
         const res = await fetch(`${API_BASE}/api/route_details/${serviceNo}`);
@@ -789,7 +1122,7 @@ async function loadStopsLayer(serviceNo) {
         if (!stops || stops.length === 0) return;
 
         const color = ROUTE_COLORS[serviceNo] || '#00A859';
-        const meta  = ROUTE_META[serviceNo]  || { label: serviceNo, route: '' };
+        const meta = ROUTE_META[serviceNo] || { label: serviceNo, route: '' };
 
         const markers = [];
         stops.forEach((stop, idx) => {
@@ -811,28 +1144,14 @@ async function loadStopsLayer(serviceNo) {
             markers.push({ marker, stop, isTerminal });
         });
 
-        // Build a polyline connecting stops in order
         const latlngs = stops.map(s => [s.lat, s.lng]);
-        const polyline = L.polyline(latlngs, {
-            color,
-            weight: 3,
-            opacity: 0.7,
-            dashArray: '6, 4'
-        });
+        const polyline = L.polyline(latlngs, { color, weight: 3, opacity: 0.7, dashArray: '6, 4' });
 
-        // Group all elements for this service
         const group = L.layerGroup();
         group.addLayer(polyline);
         markers.forEach(({ marker }) => group.addLayer(marker));
 
-        stopsLayerGroups[serviceNo] = {
-            group,
-            markers,
-            stops,
-            color,
-            meta
-        };
-
+        stopsLayerGroups[serviceNo] = { group, markers, stops, color, meta };
         group.addTo(stopsMap);
 
     } catch (err) {
@@ -840,9 +1159,6 @@ async function loadStopsLayer(serviceNo) {
     }
 }
 
-/**
- * Show / hide route layers according to the filter dropdown.
- */
 function applyRouteFilter(selected) {
     Object.entries(stopsLayerGroups).forEach(([svc, data]) => {
         if (selected === 'all' || selected === svc) {
@@ -857,7 +1173,6 @@ function applyRouteFilter(selected) {
         stopsMap.setView([17.6868, 83.2185], 13);
     } else {
         renderStopListSingle(selected);
-        // Fit map to that route's stops
         const data = stopsLayerGroups[selected];
         if (data && data.stops.length > 0) {
             const latlngs = data.stops.map(s => [s.lat, s.lng]);
@@ -866,16 +1181,12 @@ function applyRouteFilter(selected) {
     }
 }
 
-/**
- * Render the stop list for ALL routes.
- */
 function renderStopListAll() {
     const panel = document.getElementById('stopListPanel');
     if (!panel) return;
 
     let html = '';
     Object.entries(stopsLayerGroups).forEach(([svc, data]) => {
-        // Small route header
         html += `
             <div class="d-flex align-items-center gap-2 mb-2 mt-3">
                 <div class="legend-dot" style="background:${data.color};"></div>
@@ -891,18 +1202,12 @@ function renderStopListAll() {
     panel.innerHTML = html || '<p class="text-muted text-center small">No stops loaded</p>';
 }
 
-/**
- * Render the stop list for a single route.
- */
 function renderStopListSingle(serviceNo) {
     const panel = document.getElementById('stopListPanel');
     if (!panel) return;
 
     const data = stopsLayerGroups[serviceNo];
-    if (!data) {
-        panel.innerHTML = '<p class="text-muted text-center small">No stops found</p>';
-        return;
-    }
+    if (!data) { panel.innerHTML = '<p class="text-muted text-center small">No stops found</p>'; return; }
 
     let html = `
         <div class="d-flex align-items-center gap-2 mb-3">
@@ -919,13 +1224,9 @@ function renderStopListSingle(serviceNo) {
     panel.innerHTML = html;
 }
 
-/**
- * Build HTML for a single stop item in the list.
- * Clicking it pans the map to the stop and opens its popup.
- */
 function buildStopListItem(stop, serviceNo, color, isTerminal, idx) {
     const terminalClass = isTerminal ? 'terminal' : '';
-    const badge         = isTerminal ? 'Terminal' : `Stop ${idx + 1}`;
+    const badge = isTerminal ? 'Terminal' : `Stop ${idx + 1}`;
     return `
         <div class="stop-list-item ${terminalClass}"
              onclick="panToStop('${serviceNo}', ${idx})"
@@ -940,33 +1241,18 @@ function buildStopListItem(stop, serviceNo, color, isTerminal, idx) {
     `;
 }
 
-/**
- * Pan the stops map to a specific stop and open its popup.
- */
-window.panToStop = function(serviceNo, stopIdx) {
+window.panToStop = function (serviceNo, stopIdx) {
     const data = stopsLayerGroups[serviceNo];
     if (!data) return;
-
     const stop = data.stops[stopIdx];
     if (!stop) return;
-
     stopsMap.setView([stop.lat, stop.lng], 16, { animate: true });
-
-    // Open marker popup
     const markerEntry = data.markers[stopIdx];
-    if (markerEntry) {
-        markerEntry.marker.openPopup();
-    }
-
-    // Scroll page so map is visible
+    if (markerEntry) markerEntry.marker.openPopup();
     document.getElementById('stopsMap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 };
 
-/**
- * Locate user using browser GPS and pan the stops map there.
- * Shows a pulsing blue circle at user's location.
- */
-window.locateUserOnStopsMap = function() {
+window.locateUserOnStopsMap = function () {
     if (!navigator.geolocation) {
         showToast('Geolocation is not supported by your browser', 'error');
         return;
@@ -979,27 +1265,11 @@ window.locateUserOnStopsMap = function() {
     navigator.geolocation.getCurrentPosition(
         (pos) => {
             const { latitude, longitude } = pos.coords;
-
-            // Remove old marker if any
-            if (userLocationMarker) {
-                stopsMap.removeLayer(userLocationMarker);
-            }
-
-            // Custom pulsing div icon
-            const userIcon = L.divIcon({
-                className: 'user-location-marker',
-                html: '',
-                iconSize: [18, 18],
-                iconAnchor: [9, 9]
-            });
-
+            if (userLocationMarker) stopsMap.removeLayer(userLocationMarker);
+            const userIcon = L.divIcon({ className: 'user-location-marker', html: '', iconSize: [18, 18], iconAnchor: [9, 9] });
             userLocationMarker = L.marker([latitude, longitude], { icon: userIcon })
-                .addTo(stopsMap)
-                .bindPopup('<b>📍 You are here</b>')
-                .openPopup();
-
+                .addTo(stopsMap).bindPopup('<b>📍 You are here</b>').openPopup();
             stopsMap.setView([latitude, longitude], 15, { animate: true });
-
             btn.classList.remove('locating');
             btn.innerHTML = '<i class="bi bi-crosshair"></i> Locate Me';
             showToast('Location found! 📍', 'success');

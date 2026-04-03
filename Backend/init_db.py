@@ -1,10 +1,16 @@
 import os
 from flask import Flask
+from werkzeug.security import generate_password_hash
 from models import db, Route, Service, Vehicle, Stop, TimetableEntry, Driver, User, LiveLocation
 
 def create_app():
     app = Flask(__name__)
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+    _db_url = os.getenv('DATABASE_URL', '')
+    if _db_url.startswith('postgres://'):
+        _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+    if not _db_url:
+        _db_url = 'sqlite:///apsrtc_local.db'
+    app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     db.init_app(app)
     return app
@@ -12,7 +18,7 @@ def create_app():
 def initialize_db():
     app = create_app()
     with app.app_context():
-        print("[...] Initializing PostgreSQL Database...")
+        print("[...] Initializing Database...")
         # Create all tables if they don't exist
         db.create_all()
 
@@ -40,14 +46,18 @@ def initialize_db():
             db.session.add_all([v1, v2, v3])
             db.session.commit()
 
-            # Stops (Route 1)
+            # Stops (Route 1: Gajuwaka → Beach Road)
             st1 = Stop(route_id=r1.route_id, stop_name='Gajuwaka', lat=17.72, lng=83.30, stop_order=1)
             st2 = Stop(route_id=r1.route_id, stop_name='Maddilapalem', lat=17.73, lng=83.31, stop_order=2)
             st3 = Stop(route_id=r1.route_id, stop_name='Beach Road', lat=17.75, lng=83.33, stop_order=3)
-            # Stops (Route 3)
+            # Stops (Route 2: Maddilapalem → Simhachalam)
+            st6 = Stop(route_id=r2.route_id, stop_name='Maddilapalem', lat=17.73, lng=83.31, stop_order=1)
+            st7 = Stop(route_id=r2.route_id, stop_name='NAD Junction', lat=17.74, lng=83.28, stop_order=2)
+            st8 = Stop(route_id=r2.route_id, stop_name='Simhachalam', lat=17.77, lng=83.25, stop_order=3)
+            # Stops (Route 3: RTC Complex → Railway Station)
             st4 = Stop(route_id=r3.route_id, stop_name='RTC Complex', lat=17.72, lng=83.30, stop_order=1)
             st5 = Stop(route_id=r3.route_id, stop_name='Railway Station', lat=17.73, lng=83.31, stop_order=2)
-            db.session.add_all([st1, st2, st3, st4, st5])
+            db.session.add_all([st1, st2, st3, st4, st5, st6, st7, st8])
             db.session.commit()
 
             # Timetable
@@ -63,12 +73,52 @@ def initialize_db():
         else:
             print("[OK] Database tables already seeded.")
 
+        # ── Create default admin user if none exists ──
+        admin_exists = User.query.filter_by(is_admin=True).first()
+        if not admin_exists:
+            print("[...] Creating default admin user...")
+            admin_password = os.getenv('ADMIN_PASSWORD', 'admin123')
+            admin = User(
+                username='admin',
+                password=generate_password_hash(admin_password),
+                is_admin=True
+            )
+            db.session.add(admin)
+            db.session.commit()
+            print(f"[OK] Admin user created! Username: admin, Password: {admin_password}")
+            print("[!] IMPORTANT: Change the admin password immediately via the admin panel or env var ADMIN_PASSWORD")
+        else:
+            print("[OK] Admin user already exists.")
+
 def migrate():
     """Safely create tables if they don't exist, without dropping data."""
     app = create_app()
     with app.app_context():
-        print("[...] Checking/Migrating PostgreSQL Database...")
+        print("[...] Checking/Migrating Database...")
         db.create_all()
+        
+        # Add new columns if they don't exist (safe migration)
+        try:
+            from sqlalchemy import inspect
+            inspector = inspect(db.engine)
+            
+            # Check if 'is_admin' column exists in users table
+            user_columns = [col['name'] for col in inspector.get_columns('users')]
+            if 'is_admin' not in user_columns:
+                print("[...] Adding 'is_admin' column to users table...")
+                db.engine.execute("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
+                print("[OK] 'is_admin' column added.")
+            
+            # Check if 'assigned_service_id' column exists in drivers table
+            driver_columns = [col['name'] for col in inspector.get_columns('drivers')]
+            if 'assigned_service_id' not in driver_columns:
+                print("[...] Adding 'assigned_service_id' column to drivers table...")
+                db.engine.execute("ALTER TABLE drivers ADD COLUMN assigned_service_id INTEGER REFERENCES services(service_id)")
+                print("[OK] 'assigned_service_id' column added.")
+
+        except Exception as e:
+            print(f"[WARN] Migration check error (may be normal for new DB): {e}")
+        
         print("[OK] Migration complete!")
 
 if __name__ == "__main__":

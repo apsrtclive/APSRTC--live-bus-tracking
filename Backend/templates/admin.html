@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - APSRTC Live</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <!-- ADMIN NAVBAR -->
+    <nav class="navbar sticky-top" style="background: rgba(30,30,40,0.95) !important; backdrop-filter: blur(20px);">
+        <div class="container">
+            <a class="navbar-brand" href="#" style="color: #FF5E00 !important;">
+                <i class="bi bi-shield-lock-fill"></i> APSRTC Admin
+            </a>
+            <div class="d-flex align-items-center gap-3">
+                <a href="/" class="btn btn-outline-light btn-sm rounded-pill px-3">
+                    <i class="bi bi-house"></i> Main App
+                </a>
+                <span class="small text-light d-none d-md-block ms-2 border-start border-secondary ps-3">
+                    <i class="bi bi-person-fill-gear text-warning"></i> {{ username }}
+                </span>
+                <button class="btn btn-danger btn-sm rounded-pill px-3" onclick="adminLogout()">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4 mb-5 pb-5" style="max-width: 900px;">
+
+        <!-- Dashboard Stats -->
+        <div class="row g-3 mb-4 fade-in" id="dashboardStats">
+            <div class="col-4 col-md-2">
+                <div class="admin-stat-card">
+                    <div class="admin-stat-value" id="statRoutes">—</div>
+                    <div class="admin-stat-label">Routes</div>
+                </div>
+            </div>
+            <div class="col-4 col-md-2">
+                <div class="admin-stat-card">
+                    <div class="admin-stat-value" id="statServices">—</div>
+                    <div class="admin-stat-label">Services</div>
+                </div>
+            </div>
+            <div class="col-4 col-md-2">
+                <div class="admin-stat-card">
+                    <div class="admin-stat-value" id="statVehicles">—</div>
+                    <div class="admin-stat-label">Vehicles</div>
+                </div>
+            </div>
+            <div class="col-4 col-md-2">
+                <div class="admin-stat-card" style="border-color: var(--primary-color);">
+                    <div class="admin-stat-value text-success" id="statRunning">—</div>
+                    <div class="admin-stat-label">Running</div>
+                </div>
+            </div>
+            <div class="col-4 col-md-2">
+                <div class="admin-stat-card">
+                    <div class="admin-stat-value" id="statDrivers">—</div>
+                    <div class="admin-stat-label">Drivers</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Tabs -->
+        <ul class="nav nav-pills nav-fill mb-4 admin-tabs" id="adminTabs">
+            <li class="nav-item">
+                <a class="nav-link active" data-tab="routes" onclick="switchAdminTab('routes', this)">
+                    <i class="bi bi-signpost-split"></i> Routes
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-tab="services" onclick="switchAdminTab('services', this)">
+                    <i class="bi bi-bus-front"></i> Services
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-tab="vehicles" onclick="switchAdminTab('vehicles', this)">
+                    <i class="bi bi-truck"></i> Vehicles
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-tab="stops" onclick="switchAdminTab('stops', this)">
+                    <i class="bi bi-geo-alt"></i> Stops
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-tab="drivers" onclick="switchAdminTab('drivers', this)">
+                    <i class="bi bi-people"></i> Drivers
+                </a>
+            </li>
+        </ul>
+
+        <!-- ═══ ROUTES TAB ═══ -->
+        <div class="admin-tab-content" id="tab-routes">
+            <div class="card-box">
+                <h5 class="card-title"><i class="bi bi-plus-circle"></i> Add Route</h5>
+                <form id="addRouteForm">
+                    <div class="row g-2 mb-3">
+                        <div class="col-12">
+                            <input type="text" class="form-control" id="routeName" placeholder="Route Name (e.g. Gajuwaka → Beach Road)" required>
+                        </div>
+                        <div class="col-6">
+                            <input type="text" class="form-control" id="routeFrom" placeholder="From Station" required>
+                        </div>
+                        <div class="col-6">
+                            <input type="text" class="form-control" id="routeTo" placeholder="To Station" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-plus-lg"></i> Add Route</button>
+                </form>
+            </div>
+            <div class="card-box">
+                <h5 class="card-title"><i class="bi bi-table"></i> All Routes</h5>
+                <div id="routesTable" class="admin-table-wrapper">
+                    <div class="text-center text-muted py-4"><i class="bi bi-hourglass-split spinning"></i> Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ SERVICES TAB ═══ -->
+        <div class="admin-tab-content" id="tab-services" style="display: none;">
+            <div class="card-box">
+                <h5 class="card-title"><i class="bi bi-plus-circle"></i> Add Service</h5>
+                <form id="addServiceForm">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <input type="text" class="form-control" id="serviceNo" placeholder="Service No (e.g. 28A)" required>
+                        </div>
+                        <div class="col-6">
+                            <select class="form-select" id="serviceRouteId" required>
+                                <option value="">Select Route</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <select class="form-select" id="serviceType">
+                                <option value="Express">Express</option>
+                                <option value="Metro">Metro</option>
+                                <option value="Deluxe">Deluxe</option>
+                                <option value="Ordinary">Ordinary</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <input type="number" class="form-control" id="ticketPrice" placeholder="Ticket Price ₹" value="30">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-plus-lg"></i> Add Service</button>
+                </form>
+            </div>
+            <div class="card-box">
+                <h5 class="card-title"><i class="bi bi-table"></i> All Services</h5>
+                <div id="servicesTable" class="admin-table-wrapper">
+                    <div class="text-center text-muted py-4"><i class="bi bi-hourglass-split spinning"></i> Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ VEHICLES TAB ═══ -->
+        <div class="admin-tab-content" id="tab-vehicles" style="display: none;">
+            <div class="card-box">
+                <h5 class="card-title"><i class="bi bi-plus-circle"></i> Add Vehicle</h5>
+                <form id="addVehicleForm">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <input type="text" class="form-control" id="vehicleNo" placeholder="Vehicle No (e.g. AP31 AB 1234)" required>
+                        </div>
+                        <div class="col-6">
+                            <select class="form-select" id="vehicleServiceId" required>
+                                <option value="">Select Service</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <select class="form-select" id="vehicleStatus">
+                                <option value="Running">Running</option>
+                                <option value="Parked">Parked</option>
+                                <option value="Maintenance">Maintenance</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-plus-lg"></i> Add Vehicle</button>
+                </form>
+            </div>
+            <div class="card-box">
+                <h5 class="card-title"><i class="bi bi-table"></i> All Vehicles</h5>
+                <div id="vehiclesTable" class="admin-table-wrapper">
+                    <div class="text-center text-muted py-4"><i class="bi bi-hourglass-split spinning"></i> Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ STOPS TAB ═══ -->
+        <div class="admin-tab-content" id="tab-stops" style="display: none;">
+            <div class="card-box">
+                <h5 class="card-title"><i class="bi bi-plus-circle"></i> Add Stop</h5>
+                <form id="addStopForm">
+                    <div class="row g-2 mb-3">
+                        <div class="col-12">
+                            <select class="form-select" id="stopRouteId" required>
+                                <option value="">Select Route</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <input type="text" class="form-control" id="stopName" placeholder="Stop Name" required>
+                        </div>
+                        <div class="col-6">
+                            <input type="number" class="form-control" id="stopOrder" placeholder="Stop Order (1, 2, 3...)" required>
+                        </div>
+                        <div class="col-6">
+                            <input type="number" step="any" class="form-control" id="stopLat" placeholder="Latitude" required>
+                        </div>
+                        <div class="col-6">
+                            <input type="number" step="any" class="form-control" id="stopLng" placeholder="Longitude" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-plus-lg"></i> Add Stop</button>
+                </form>
+            </div>
+            <div class="card-box">
+                <h5 class="card-title"><i class="bi bi-table"></i> All Stops</h5>
+                <div id="stopsTable" class="admin-table-wrapper">
+                    <div class="text-center text-muted py-4"><i class="bi bi-hourglass-split spinning"></i> Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ DRIVERS TAB ═══ -->
+        <div class="admin-tab-content" id="tab-drivers" style="display: none;">
+            <div class="card-box">
+                <h5 class="card-title"><i class="bi bi-person-plus"></i> Assign Driver to Service</h5>
+                <form id="assignDriverForm">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <select class="form-select" id="assignDriverId" required>
+                                <option value="">Select Driver</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <select class="form-select" id="assignServiceId">
+                                <option value="">Unassign (No Service)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-link-45deg"></i> Assign Driver</button>
+                </form>
+            </div>
+            <div class="card-box">
+                <h5 class="card-title"><i class="bi bi-table"></i> All Drivers</h5>
+                <div id="driversTable" class="admin-table-wrapper">
+                    <div class="text-center text-muted py-4"><i class="bi bi-hourglass-split spinning"></i> Loading...</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script>
+        // ═══════════════════════════════════════════
+        // ADMIN PANEL JAVASCRIPT
+        // ═══════════════════════════════════════════
+
+        // ── Toast ──
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.className = `custom-toast ${type}`;
+            let icon = 'bi-check-circle-fill';
+            if (type === 'error') icon = 'bi-exclamation-triangle-fill';
+            if (type === 'warning') icon = 'bi-info-circle-fill';
+            toast.innerHTML = `<i class="bi ${icon} toast-icon"></i><span class="toast-message">${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => { toast.style.animation = 'fadeOutRight 0.3s forwards'; setTimeout(() => toast.remove(), 300); }, 4000);
+        }
+
+        // ── Tab Switching ──
+        function switchAdminTab(tab, el) {
+            document.querySelectorAll('.admin-tab-content').forEach(t => t.style.display = 'none');
+            document.querySelectorAll('.admin-tabs .nav-link').forEach(n => n.classList.remove('active'));
+            document.getElementById('tab-' + tab).style.display = 'block';
+            el.classList.add('active');
+            loadTabData(tab);
+        }
+
+        // ── Load Data for Tab ──
+        async function loadTabData(tab) {
+            if (tab === 'routes') await loadRoutes();
+            if (tab === 'services') await loadServices();
+            if (tab === 'vehicles') await loadVehicles();
+            if (tab === 'stops') await loadStops();
+            if (tab === 'drivers') await loadDrivers();
+        }
+
+        // ── Dashboard Stats ──
+        async function loadDashboard() {
+            try {
+                const res = await fetch('/api/dashboard');
+                const d = await res.json();
+                document.getElementById('statRoutes').textContent = d.total_routes;
+                document.getElementById('statServices').textContent = d.total_services;
+                document.getElementById('statVehicles').textContent = d.total_vehicles;
+                document.getElementById('statRunning').textContent = d.running_buses;
+                document.getElementById('statDrivers').textContent = d.total_drivers || 0;
+            } catch(e) { console.error(e); }
+        }
+
+        // ── Helper: API Call ──
+        async function apiCall(url, method = 'GET', body = null) {
+            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            if (body) opts.body = JSON.stringify(body);
+            const res = await fetch(url, opts);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'API Error');
+            return data;
+        }
+
+        // ═══ ROUTES ═══
+        async function loadRoutes() {
+            try {
+                const routes = await apiCall('/api/admin/routes');
+                let html = '<table class="table table-sm table-hover mb-0"><thead><tr><th>ID</th><th>Name</th><th>From</th><th>To</th><th></th></tr></thead><tbody>';
+                routes.forEach(r => {
+                    html += `<tr>
+                        <td><span class="badge bg-secondary">${r.route_id}</span></td>
+                        <td class="fw-bold">${r.route_name}</td>
+                        <td>${r.from}</td>
+                        <td>${r.to}</td>
+                        <td><button class="btn btn-outline-danger btn-sm" onclick="deleteItem('route', ${r.route_id})"><i class="bi bi-trash"></i></button></td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                document.getElementById('routesTable').innerHTML = routes.length ? html : '<p class="text-muted text-center py-3">No routes yet</p>';
+                // Populate route dropdowns
+                populateRouteDropdowns(routes);
+            } catch(e) { showToast(e.message, 'error'); }
+        }
+
+        function populateRouteDropdowns(routes) {
+            ['serviceRouteId', 'stopRouteId'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const val = el.value;
+                el.innerHTML = '<option value="">Select Route</option>';
+                routes.forEach(r => { el.innerHTML += `<option value="${r.route_id}">${r.route_name} (${r.from} → ${r.to})</option>`; });
+                el.value = val;
+            });
+        }
+
+        // ═══ SERVICES ═══
+        async function loadServices() {
+            try {
+                const services = await apiCall('/api/admin/services');
+                let html = '<table class="table table-sm table-hover mb-0"><thead><tr><th>ID</th><th>No</th><th>Route</th><th>Type</th><th>Price</th><th></th></tr></thead><tbody>';
+                services.forEach(s => {
+                    html += `<tr>
+                        <td><span class="badge bg-secondary">${s.service_id}</span></td>
+                        <td class="fw-bold">${s.service_no}</td>
+                        <td>${s.route_name}</td>
+                        <td><span class="badge bg-info">${s.service_type}</span></td>
+                        <td>₹${s.ticket_price}</td>
+                        <td><button class="btn btn-outline-danger btn-sm" onclick="deleteItem('service', ${s.service_id})"><i class="bi bi-trash"></i></button></td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                document.getElementById('servicesTable').innerHTML = services.length ? html : '<p class="text-muted text-center py-3">No services yet</p>';
+                populateServiceDropdowns(services);
+            } catch(e) { showToast(e.message, 'error'); }
+        }
+
+        function populateServiceDropdowns(services) {
+            ['vehicleServiceId', 'assignServiceId'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const val = el.value;
+                const unassignOpt = id === 'assignServiceId' ? '<option value="">Unassign (No Service)</option>' : '<option value="">Select Service</option>';
+                el.innerHTML = unassignOpt;
+                services.forEach(s => { el.innerHTML += `<option value="${s.service_id}">${s.service_no} — ${s.route_name}</option>`; });
+                el.value = val;
+            });
+        }
+
+        // ═══ VEHICLES ═══
+        async function loadVehicles() {
+            try {
+                const vehicles = await apiCall('/api/admin/vehicles');
+                let html = '<table class="table table-sm table-hover mb-0"><thead><tr><th>ID</th><th>Vehicle No</th><th>Service</th><th>Status</th><th></th></tr></thead><tbody>';
+                vehicles.forEach(v => {
+                    const statusClass = v.status === 'Running' ? 'bg-success' : (v.status === 'Parked' ? 'bg-warning text-dark' : 'bg-danger');
+                    html += `<tr>
+                        <td><span class="badge bg-secondary">${v.vehicle_id}</span></td>
+                        <td class="fw-bold">${v.vehicle_no}</td>
+                        <td>${v.service_no}</td>
+                        <td><span class="badge ${statusClass}">${v.status}</span></td>
+                        <td><button class="btn btn-outline-danger btn-sm" onclick="deleteItem('vehicle', ${v.vehicle_id})"><i class="bi bi-trash"></i></button></td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                document.getElementById('vehiclesTable').innerHTML = vehicles.length ? html : '<p class="text-muted text-center py-3">No vehicles yet</p>';
+            } catch(e) { showToast(e.message, 'error'); }
+        }
+
+        // ═══ STOPS ═══
+        async function loadStops() {
+            try {
+                const stops = await apiCall('/api/admin/stops');
+                let html = '<table class="table table-sm table-hover mb-0"><thead><tr><th>ID</th><th>Stop</th><th>Route</th><th>Order</th><th>Lat/Lng</th><th></th></tr></thead><tbody>';
+                stops.forEach(s => {
+                    html += `<tr>
+                        <td><span class="badge bg-secondary">${s.stop_id}</span></td>
+                        <td class="fw-bold">${s.stop_name}</td>
+                        <td class="small">${s.route_name}</td>
+                        <td><span class="badge bg-primary">#${s.stop_order}</span></td>
+                        <td class="small text-muted">${s.lat?.toFixed(4)}, ${s.lng?.toFixed(4)}</td>
+                        <td><button class="btn btn-outline-danger btn-sm" onclick="deleteItem('stop', ${s.stop_id})"><i class="bi bi-trash"></i></button></td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                document.getElementById('stopsTable').innerHTML = stops.length ? html : '<p class="text-muted text-center py-3">No stops yet</p>';
+            } catch(e) { showToast(e.message, 'error'); }
+        }
+
+        // ═══ DRIVERS ═══
+        async function loadDrivers() {
+            try {
+                const drivers = await apiCall('/api/admin/drivers');
+                let html = '<table class="table table-sm table-hover mb-0"><thead><tr><th>ID</th><th>Username</th><th>Assigned Service</th><th></th></tr></thead><tbody>';
+                drivers.forEach(d => {
+                    const svc = d.assigned_service ? `<span class="badge bg-success">${d.assigned_service.service_no}</span>` : '<span class="badge bg-secondary">Unassigned</span>';
+                    html += `<tr>
+                        <td><span class="badge bg-secondary">${d.id}</span></td>
+                        <td class="fw-bold">${d.username}</td>
+                        <td>${svc}</td>
+                        <td><button class="btn btn-outline-danger btn-sm" onclick="deleteItem('driver', ${d.id})"><i class="bi bi-trash"></i></button></td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                document.getElementById('driversTable').innerHTML = drivers.length ? html : '<p class="text-muted text-center py-3">No drivers yet</p>';
+                // Populate driver dropdown
+                const el = document.getElementById('assignDriverId');
+                if (el) {
+                    el.innerHTML = '<option value="">Select Driver</option>';
+                    drivers.forEach(d => { el.innerHTML += `<option value="${d.id}">${d.username}${d.assigned_service ? ` (→ ${d.assigned_service.service_no})` : ''}</option>`; });
+                }
+            } catch(e) { showToast(e.message, 'error'); }
+        }
+
+        // ═══ DELETE ═══
+        async function deleteItem(type, id) {
+            if (!confirm(`Are you sure you want to delete this ${type}?`)) return;
+            try {
+                await apiCall(`/api/admin/delete_${type}/${id}`, 'DELETE');
+                showToast(`${type} deleted`, 'success');
+                loadDashboard();
+                // Reload current tab
+                const activeTab = document.querySelector('.admin-tabs .nav-link.active')?.dataset.tab || 'routes';
+                loadTabData(activeTab);
+            } catch(e) { showToast(e.message, 'error'); }
+        }
+
+        // ═══ FORM SUBMISSIONS ═══
+        document.getElementById('addRouteForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                await apiCall('/api/admin/add_route', 'POST', {
+                    route_name: document.getElementById('routeName').value,
+                    from: document.getElementById('routeFrom').value,
+                    to: document.getElementById('routeTo').value
+                });
+                showToast('Route added!', 'success');
+                e.target.reset();
+                loadRoutes();
+                loadDashboard();
+            } catch(err) { showToast(err.message, 'error'); }
+        });
+
+        document.getElementById('addServiceForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                await apiCall('/api/admin/add_service', 'POST', {
+                    service_no: document.getElementById('serviceNo').value,
+                    route_id: parseInt(document.getElementById('serviceRouteId').value),
+                    service_type: document.getElementById('serviceType').value,
+                    ticket_price: parseInt(document.getElementById('ticketPrice').value)
+                });
+                showToast('Service added!', 'success');
+                e.target.reset();
+                loadServices();
+                loadDashboard();
+            } catch(err) { showToast(err.message, 'error'); }
+        });
+
+        document.getElementById('addVehicleForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                await apiCall('/api/admin/add_vehicle', 'POST', {
+                    vehicle_no: document.getElementById('vehicleNo').value,
+                    service_id: parseInt(document.getElementById('vehicleServiceId').value),
+                    status: document.getElementById('vehicleStatus').value
+                });
+                showToast('Vehicle added!', 'success');
+                e.target.reset();
+                loadVehicles();
+                loadDashboard();
+            } catch(err) { showToast(err.message, 'error'); }
+        });
+
+        document.getElementById('addStopForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                await apiCall('/api/admin/add_stop', 'POST', {
+                    route_id: parseInt(document.getElementById('stopRouteId').value),
+                    stop_name: document.getElementById('stopName').value,
+                    stop_order: parseInt(document.getElementById('stopOrder').value),
+                    lat: parseFloat(document.getElementById('stopLat').value),
+                    lng: parseFloat(document.getElementById('stopLng').value)
+                });
+                showToast('Stop added!', 'success');
+                e.target.reset();
+                loadStops();
+                loadDashboard();
+            } catch(err) { showToast(err.message, 'error'); }
+        });
+
+        document.getElementById('assignDriverForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const serviceId = document.getElementById('assignServiceId').value;
+                await apiCall('/api/admin/assign_driver', 'POST', {
+                    driver_id: parseInt(document.getElementById('assignDriverId').value),
+                    service_id: serviceId ? parseInt(serviceId) : null
+                });
+                showToast('Driver assignment updated!', 'success');
+                loadDrivers();
+            } catch(err) { showToast(err.message, 'error'); }
+        });
+
+        // ── Logout ──
+        async function adminLogout() {
+            try {
+                await fetch("/api/user/logout", { method: "POST" });
+                window.location.href = "/login";
+            } catch (e) { window.location.href = "/login"; }
+        }
+
+        // ── Init ──
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDashboard();
+            loadRoutes();
+            // Also pre-load services for dropdowns
+            loadServices();
+        });
+    </script>
+</body>
+
+</html>

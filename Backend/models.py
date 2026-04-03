@@ -23,6 +23,7 @@ class Service(db.Model):
     route = db.relationship('Route', back_populates='services')
     vehicles = db.relationship('Vehicle', back_populates='service')
     timetable = db.relationship('TimetableEntry', back_populates='service')
+    assigned_drivers = db.relationship('Driver', back_populates='assigned_service')
 
 class Vehicle(db.Model):
     __tablename__ = 'vehicles'
@@ -71,9 +72,13 @@ class Driver(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String, unique=True, nullable=False)
     password = db.Column(db.String, nullable=False)
+    assigned_service_id = db.Column(db.Integer, db.ForeignKey('services.service_id'), nullable=True)
+
+    assigned_service = db.relationship('Service', back_populates='assigned_drivers')
 
 class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String, unique=True, nullable=False)
     password = db.Column(db.String, nullable=False)
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
