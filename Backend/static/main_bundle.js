@@ -747,43 +747,56 @@ function updateTimelineBusPosition(currentLat, currentLng) {
         }
     }
 
-    let reachedIndex = 0;
+    // Determine the precise physical segment
+    let segmentStartIndex = 0;
+    let segmentEndIndex = 1;
 
-    // Determine the exact segment the bus is in
     if (closestIndex === 0) {
-        reachedIndex = (minDistance < 0.3) ? 0 : 0;
+        segmentStartIndex = 0;
+        segmentEndIndex = 1;
     } else if (closestIndex === currentRouteStops.length - 1) {
-        reachedIndex = (minDistance < 0.3) ? closestIndex : closestIndex - 1;
+        segmentStartIndex = currentRouteStops.length - 2;
+        segmentEndIndex = currentRouteStops.length - 1;
     } else {
-        // Bus is somewhere in the middle. Compare prev and next to see which side of closestIndex it's on
         let distPrev = getDistance(currentLat, currentLng, currentRouteStops[closestIndex - 1].lat, currentRouteStops[closestIndex - 1].lng);
         let distNext = getDistance(currentLat, currentLng, currentRouteStops[closestIndex + 1].lat, currentRouteStops[closestIndex + 1].lng);
-
-        if (minDistance < 0.3) {
-            reachedIndex = closestIndex; // It physically reached closestIndex
-        } else if (distNext < distPrev) {
-            // It is between closestIndex and next. So it has passed closestIndex
-            reachedIndex = closestIndex;
+        if (distPrev < distNext) {
+            segmentStartIndex = closestIndex - 1;
+            segmentEndIndex = closestIndex;
         } else {
-            // It is between prev and closestIndex. So it has passed prev.
-            reachedIndex = closestIndex - 1;
+            segmentStartIndex = closestIndex;
+            segmentEndIndex = closestIndex + 1;
         }
     }
 
-    // Keep the timeline moving forward, don't jump backward purely due to GPS bounce
-    lastReachedStopIndex = Math.max(lastReachedStopIndex, reachedIndex);
+    let startStop = currentRouteStops[segmentStartIndex];
+    let endStop = currentRouteStops[segmentEndIndex];
+
+    let distToStart = getDistance(currentLat, currentLng, startStop.lat, startStop.lng);
+    let distToEnd = getDistance(currentLat, currentLng, endStop.lat, endStop.lng);
+
+    // Calculate real-time continuous progress ratio based strictly on GPS mathematically
+    let progress = Math.max(0, Math.min(1, distToStart / (distToStart + distToEnd)));
 
     const blocksCount = currentRouteStops.length - 1;
     const basePercentagePerBlock = 100 / blocksCount;
 
-    // Bus icon precisely hops from junction to junction
-    const currentProgressPercent = lastReachedStopIndex * basePercentagePerBlock;
+    // Bus icon precisely tracks physical map movement without artificial animations
+    const currentProgressPercent = (segmentStartIndex * basePercentagePerBlock) + (progress * basePercentagePerBlock);
     const busTrackerIcon = document.getElementById('busTrackerIcon');
     if (busTrackerIcon) {
+        busTrackerIcon.style.transition = 'none'; // strictly driven by gps coordinates in real-time
         busTrackerIcon.style.top = `calc(${currentProgressPercent}% - 25px)`;
-        // Optional: add a smooth transition so it slides to the hop
-        busTrackerIcon.style.transition = 'top 1s ease-in-out';
     }
+
+    // We reached a node if we physically start the segment, or if we are touching the end stop
+    let reachedIndex = segmentStartIndex;
+    if (minDistance < 0.3 && closestIndex === segmentEndIndex) {
+        reachedIndex = segmentEndIndex;
+    }
+
+    // Keep the timeline moving forward, don't jump backward purely due to GPS bounce
+    lastReachedStopIndex = Math.max(lastReachedStopIndex, reachedIndex);
 
     // Style the timeline junction nodes based on reach status
     for (let i = 0; i < currentRouteStops.length; i++) {

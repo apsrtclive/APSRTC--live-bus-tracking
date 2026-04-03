@@ -2,7 +2,7 @@
 // APSRTC Live — Service Worker (PWA Offline Support)
 // ═══════════════════════════════════════════════════════
 
-const CACHE_NAME = 'apsrtc-live-v8';
+const CACHE_NAME = 'apsrtc-live-v9';
 const STATIC_ASSETS = [
     '/',
     '/static/style.css',
