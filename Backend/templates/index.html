@@ -82,7 +82,7 @@
         <!-- TAB CONTENT: SEARCH -->
         <div id="section-search" class="mb-5">
             <h5 class="fw-bold mb-3" style="color: var(--primary-color);"><i class="bi bi-ticket-perforated"></i> Find Bus</h5>
-            <div class="card-box">
+            <div class="card-box hover-lift slide-up" style="animation-delay: 0.1s;">
                 <form id="ticketForm">
                     <datalist id="stationList"></datalist>
 
@@ -109,7 +109,7 @@
                         </select>
                     </div>
 
-                    <button type="submit" class="btn btn-primary w-100 btn-lg shadow-sm">
+                    <button type="submit" class="btn btn-primary w-100 btn-lg shadow-sm btn-pulse hover-lift">
                         <i class="bi bi-search"></i> Search Buses
                     </button>
                 </form>
@@ -122,7 +122,7 @@
         <!-- TAB CONTENT: TRACKING -->
         <div id="section-track" class="mb-5">
             <h5 class="fw-bold mb-3" style="color: var(--primary-color);"><i class="bi bi-broadcast"></i> Live Tracking</h5>
-            <div class="card-box">
+            <div class="card-box hover-lift slide-up" style="animation-delay: 0.2s;">
 
                 <div class="text-center mb-4">
                     <div class="toggle-container">
@@ -142,7 +142,7 @@
                 <div id="trackingResult"></div>
             </div>
 
-            <div class="card-box mt-3">
+            <div class="card-box mt-3 hover-lift slide-up" style="animation-delay: 0.3s;">
                 <h5 class="card-title"><i class="bi bi-clock"></i> Quick Timetable</h5>
                 <form id="timetableForm" class="row g-2">
                     <div class="col-5">
@@ -180,7 +180,7 @@
             </div>
 
             <!-- Map -->
-            <div class="card-box p-0 overflow-hidden mb-3" style="border-radius: var(--border-radius);">
+            <div class="card-box p-0 overflow-hidden mb-3 hover-lift slide-up" style="animation-delay: 0.4s; border-radius: var(--border-radius);">
                 <div id="stopsMap" style="height: 420px; width: 100%;"></div>
             </div>
 

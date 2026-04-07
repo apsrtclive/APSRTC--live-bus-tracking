@@ -41,13 +41,14 @@ if _db_url.startswith('postgres://'):
     _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
 
 if not _db_url:
-    _db_url = 'sqlite:///apsrtc_local.db'
-    app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    _db_url = 'sqlite:///apsrtc.db'
+
+app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+if _db_url.startswith('sqlite'):
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {}
 else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_size': 5,
         'pool_recycle': 1800,
