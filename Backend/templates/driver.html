@@ -454,8 +454,8 @@
             stopTracking();
             try {
                 await fetch("/api/driver/logout", { method: "POST" });
-                window.location.reload();
-            } catch (e) { window.location.reload(); }
+                window.location.href = "/driver/login";
+            } catch (e) { window.location.href = "/driver/login"; }
         }
 
         // Auto-logout when page closes

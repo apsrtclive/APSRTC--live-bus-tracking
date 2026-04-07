@@ -234,8 +234,8 @@
         async function logout() {
             try {
                 await fetch("/api/user/logout", { method: "POST" });
-                window.location.reload();
-            } catch (e) { window.location.reload(); }
+                window.location.href = "/login";
+            } catch (e) { window.location.href = "/login"; }
         }
     </script>
     <!-- Leaflet JS -->
