@@ -1,4 +1,10 @@
+import sys
 import os
+
+# ── Ensure the Backend directory is always in the Python path ──
+# This fixes imports like `from models import db` when gunicorn runs
+# from the repo root (e.g. via --chdir Backend or from Azure App Service).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import math
 from flask import Flask, jsonify, request, render_template, session, redirect, url_for
 from flask_cors import CORS
@@ -61,8 +67,24 @@ db.init_app(app)
 with app.app_context():
     try:
         db.create_all()
+        print("[OK] Database tables created/verified.", flush=True)
+
+        # ── Auto-seed admin user on first deployment ──
+        from werkzeug.security import generate_password_hash as _gph
+        from models import User as _User
+        if not _User.query.filter_by(is_admin=True).first():
+            admin_password = os.getenv('ADMIN_PASSWORD', 'admin123')
+            admin = _User(
+                username='admin',
+                password=_gph(admin_password),
+                is_admin=True
+            )
+            db.session.add(admin)
+            db.session.commit()
+            print(f"[OK] Default admin created. Username: admin, Password: {admin_password}", flush=True)
+            print("[!] CHANGE the admin password immediately via ADMIN_PASSWORD env var!", flush=True)
     except Exception as e:
-        print(f"Database Initialization Error: {e}", flush=True)
+        print(f"[ERROR] Database Initialization: {e}", flush=True)
 
 CORS(app)
 

@@ -1,1 +1,1 @@
-web: cd Backend && gunicorn --bind=0.0.0.0:${PORT:-8000} --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --workers 1 --timeout 120 backend:app
+web: gunicorn --chdir Backend backend:app --workers 4 --threads 2 --worker-class gthread --timeout 120 --preload --log-level info
