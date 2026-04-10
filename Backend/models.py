@@ -82,3 +82,29 @@ class User(db.Model):
     username = db.Column(db.String, unique=True, nullable=False)
     password = db.Column(db.String, nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
+
+class BusSchedule(db.Model):
+    """New schedule table seeded with 129 Visakhapatnam bus routes."""
+    __tablename__ = 'bus_schedule'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    route_code = db.Column(db.String(10), nullable=False, index=True)   # e.g. VZ001
+    source = db.Column(db.String(100), nullable=False)                   # always RTC Complex
+    destination = db.Column(db.String(100), nullable=False, index=True)
+    bus_type = db.Column(db.String(50), nullable=False, index=True)      # Metro Express / Express / Ordinary
+    departure_time = db.Column(db.String(8), nullable=False)             # HH:MM
+    arrival_time = db.Column(db.String(8), nullable=False)               # HH:MM
+    duration = db.Column(db.String(20), nullable=False)                  # e.g. "45m", "1h 10m"
+    fare = db.Column(db.Integer, default=0)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "route_code": self.route_code,
+            "source": self.source,
+            "destination": self.destination,
+            "bus_type": self.bus_type,
+            "departure_time": self.departure_time,
+            "arrival_time": self.arrival_time,
+            "duration": self.duration,
+            "fare": self.fare,
+        }

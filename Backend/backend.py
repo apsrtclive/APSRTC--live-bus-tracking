@@ -1,28 +1,35 @@
 import sys
 import os
 
-# ── Ensure the Backend directory is always in the Python path ──
-# This fixes imports like `from models import db` when gunicorn runs
-# from the repo root (e.g. via --chdir Backend or from Azure App Service).
+# ── Ensure Backend dir is always in the Python path ──
+# Fixes `from models import db` whether gunicorn runs from root or Backend/
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import math
+import time
+import threading
+from datetime import timedelta, datetime
+from functools import wraps
+
 from flask import Flask, jsonify, request, render_template, session, redirect, url_for
 from flask_cors import CORS
 from flask_caching import Cache
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
-import time
-import threading
 from dotenv import load_dotenv
 from flask_talisman import Talisman
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from sqlalchemy import or_, and_
 from sqlalchemy.exc import IntegrityError
-from models import db, Route, Service, Vehicle, Stop, TimetableEntry, Driver, User, LiveLocation
+
+from models import db, Route, Service, Vehicle, Stop, TimetableEntry, Driver, User, LiveLocation, BusSchedule
 
 load_dotenv()
 
+# ═══════════════════════════════════════════════════════
+# APP CONFIG
+# ═══════════════════════════════════════════════════════
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 Talisman(app, content_security_policy=None, force_https=False)
@@ -33,19 +40,17 @@ cache = Cache(app, config={
     'CACHE_DEFAULT_TIMEOUT': 300
 })
 
-app.secret_key = os.getenv("SECRET_KEY", "fallback_dev_key")
+app.secret_key = os.getenv("SECRET_KEY", "fallback_dev_key_change_me")
 
-from datetime import timedelta
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV', 'development') == 'production'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-# Setup Database Connection
+# ── Database ──
 _db_url = os.getenv('DATABASE_URL', '')
 if _db_url.startswith('postgres://'):
     _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
-
 if not _db_url:
     _db_url = 'sqlite:///apsrtc.db'
 
@@ -63,78 +68,65 @@ else:
     }
 
 db.init_app(app)
+CORS(app)
 
+# ── Startup: create tables + seed data ──
 with app.app_context():
     try:
         db.create_all()
         print("[OK] Database tables created/verified.", flush=True)
 
-        # ── Auto-seed admin user on first deployment ──
-        from werkzeug.security import generate_password_hash as _gph
-        from models import User as _User
-        if not _User.query.filter_by(is_admin=True).first():
+        # Auto-seed admin user
+        if not User.query.filter_by(is_admin=True).first():
             admin_password = os.getenv('ADMIN_PASSWORD', 'admin123')
-            admin = _User(
+            admin = User(
                 username='admin',
-                password=_gph(admin_password),
+                password=generate_password_hash(admin_password),
                 is_admin=True
             )
             db.session.add(admin)
             db.session.commit()
             print(f"[OK] Default admin created. Username: admin, Password: {admin_password}", flush=True)
-            print("[!] CHANGE the admin password immediately via ADMIN_PASSWORD env var!", flush=True)
+
+        # Seed bus schedule
+        from seed_data import seed_bus_schedule
+        seed_bus_schedule(db, BusSchedule)
+
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"[ERROR] Database Initialization: {e}", flush=True)
 
-CORS(app)
 
-# ─── Haversine Distance Helper ─────────────────────────
+# ═══════════════════════════════════════════════════════
+# HELPERS
+# ═══════════════════════════════════════════════════════
+
 def haversine(lat1, lon1, lat2, lon2):
-    """Calculate distance in km between two lat/lng points."""
     R = 6371.0
     dLat = math.radians(lat2 - lat1)
     dLon = math.radians(lon2 - lon1)
-    a = math.sin(dLat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dLon / 2) ** 2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
+    a = math.sin(dLat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dLon/2)**2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
-
-@app.route("/api/admin/force_seed")
-def force_seed():
-    from werkzeug.security import generate_password_hash
-    import init_db
-    
-    # 1. Force extreme DB drop and initialization to fix SQLite corruption
-    db.drop_all()
-    init_db.initialize_db()
-
-    # 2. Flush any hanging drivers and forcibly insert our 3 specific ones
-    db.session.query(Driver).delete()
-    db.session.commit()
-    
-    d1 = Driver(username='driver_28a', password=generate_password_hash('pass28a'))
-    d2 = Driver(username='driver_6k', password=generate_password_hash('pass6k'))
-    d3 = Driver(username='driver_400k', password=generate_password_hash('pass400k'))
-    db.session.add_all([d1, d2, d3])
-    db.session.commit()
-    return "Database forcefully completely wiped, re-initialized and powerfully re-seeded with exactly 3 Drivers!"
-
-# ─── Admin Auth Helpers ─────────────────────────────────
 def is_admin():
-    """Check if the current session belongs to an admin user."""
-    if "user_id" not in session or not session.get("is_admin"):
-        return False
-    return True
+    return "user_id" in session and session.get("is_admin")
 
 def admin_required(f):
-    """Decorator to protect admin-only endpoints."""
-    from functools import wraps
     @wraps(f)
     def decorated(*args, **kwargs):
         if not is_admin():
             return jsonify({"error": "Admin access required"}), 403
         return f(*args, **kwargs)
     return decorated
+
+def get_ist_time():
+    """Return current IST datetime string HH:MM."""
+    from datetime import timezone
+    ist = timezone(timedelta(hours=5, minutes=30))
+    return datetime.now(ist).strftime("%H:%M")
+
+DEBUG_LOGS = []
 
 
 # ═══════════════════════════════════════════════════════
@@ -171,10 +163,9 @@ def driver_dashboard():
         return redirect("/driver/login")
     return render_template("driver.html", username=session.get("username"))
 
-
-# ═══════════════════════════════════════════════════════
-# PWA — Service Worker & Manifest
-# ═══════════════════════════════════════════════════════
+@app.route("/offline")
+def offline_page():
+    return render_template("offline.html")
 
 @app.route("/manifest.json")
 def serve_manifest():
@@ -187,192 +178,196 @@ def serve_sw():
     response.headers['Service-Worker-Allowed'] = '/'
     return response
 
-@app.route("/offline")
-def offline_page():
-    return render_template("offline.html")
+
+# ═══════════════════════════════════════════════════════
+# BUS SCHEDULE APIs (new)
+# ═══════════════════════════════════════════════════════
+
+@app.route("/api/buses")
+def api_search_buses():
+    """
+    Search the BusSchedule table.
+    Query params: from, to, type (optional)
+    """
+    from_loc = request.args.get("from", "RTC Complex")
+    to_loc   = request.args.get("to", "").strip()
+    bus_type = request.args.get("type", "").strip()
+
+    q = BusSchedule.query.filter(
+        BusSchedule.source.ilike(f"%{from_loc}%")
+    )
+    if to_loc:
+        q = q.filter(BusSchedule.destination.ilike(f"%{to_loc}%"))
+    if bus_type:
+        q = q.filter(BusSchedule.bus_type.ilike(f"%{bus_type}%"))
+
+    q = q.order_by(BusSchedule.departure_time.asc())
+    results = [b.to_dict() for b in q.all()]
+
+    # Annotate each result with "minutes_until" based on current IST
+    ist_now = get_ist_time()
+    for r in results:
+        try:
+            now_h, now_m = map(int, ist_now.split(":"))
+            dep_h, dep_m = map(int, r["departure_time"].split(":"))
+            now_total  = now_h * 60 + now_m
+            dep_total  = dep_h * 60 + dep_m
+            diff = dep_total - now_total
+            if diff < 0:
+                diff += 1440  # next day
+            r["minutes_until"] = diff
+            r["is_running"] = (0 <= dep_total - now_total <= int(r.get("duration_minutes", 60)))
+        except Exception:
+            r["minutes_until"] = None
+            r["is_running"] = False
+
+    return jsonify(results)
+
+
+@app.route("/api/destinations")
+@cache.cached(timeout=3600)
+def api_destinations():
+    """Return list of unique destinations."""
+    dests = db.session.query(BusSchedule.destination).distinct().order_by(BusSchedule.destination).all()
+    return jsonify([d[0] for d in dests])
+
+
+@app.route("/api/next-bus")
+def api_next_bus():
+    """
+    Return the next bus departing after current IST time.
+    Query param: to=Gajuwaka
+    """
+    to_loc   = request.args.get("to", "").strip()
+    bus_type = request.args.get("type", "").strip()
+    ist_now  = get_ist_time()
+
+    q = BusSchedule.query
+    if to_loc:
+        q = q.filter(BusSchedule.destination.ilike(f"%{to_loc}%"))
+    if bus_type:
+        q = q.filter(BusSchedule.bus_type.ilike(f"%{bus_type}%"))
+
+    buses = q.order_by(BusSchedule.departure_time.asc()).all()
+    if not buses:
+        return jsonify({"error": "No buses found"}), 404
+
+    # Find next bus after now (wrap around midnight)
+    now_h, now_m = map(int, ist_now.split(":"))
+    now_total = now_h * 60 + now_m
+
+    next_bus = None
+    min_diff = float('inf')
+    for bus in buses:
+        dep_h, dep_m = map(int, bus.departure_time.split(":"))
+        dep_total = dep_h * 60 + dep_m
+        diff = dep_total - now_total
+        if diff < 0:
+            diff += 1440
+        if diff < min_diff:
+            min_diff = diff
+            next_bus = bus
+
+    if not next_bus:
+        return jsonify({"error": "No upcoming buses"}), 404
+
+    result = next_bus.to_dict()
+    result["minutes_until"] = min_diff
+    return jsonify(result)
+
+
+@app.route("/api/dashboard")
+@cache.cached(timeout=60)
+def dashboard():
+    routes   = Route.query.count()
+    services = Service.query.count()
+    vehicles = Vehicle.query.count()
+    running  = Vehicle.query.filter_by(status='Running').count()
+    drivers  = Driver.query.count()
+    schedules = BusSchedule.query.count()
+    destinations = db.session.query(BusSchedule.destination).distinct().count()
+
+    return jsonify({
+        "total_routes": routes,
+        "total_services": services,
+        "total_vehicles": vehicles,
+        "running_buses": running,
+        "total_drivers": drivers,
+        "total_schedules": schedules,
+        "total_destinations": destinations,
+    })
 
 
 # ═══════════════════════════════════════════════════════
-# PUBLIC APIs
+# LEGACY PUBLIC APIs
 # ═══════════════════════════════════════════════════════
 
 @app.route("/api/search")
 def search_buses():
     from_station = request.args.get("from", "")
-    to_station = request.args.get("to", "")
+    to_station   = request.args.get("to", "")
     service_type = request.args.get("service")
 
-    query = db.session.query(Service, Route, Vehicle).join(Route).join(Vehicle)
-    
+    q = db.session.query(Service, Route, Vehicle).join(Route).join(Vehicle)
     condition = or_(
         and_(Route.from_station.ilike(f"%{from_station}%"), Route.to_station.ilike(f"%{to_station}%")),
         and_(Route.from_station.ilike(f"%{to_station}%"), Route.to_station.ilike(f"%{from_station}%"))
     )
-    query = query.filter(condition)
-
+    q = q.filter(condition)
     if service_type:
-        query = query.filter(Service.service_type == service_type)
+        q = q.filter(Service.service_type == service_type)
 
     results = []
-    for s, r, v in query.all():
-        results.append({
-            "service_no": s.service_no,
-            "route_name": r.route_name,
-            "service_type": s.service_type,
-            "ticket_price": s.ticket_price,
-            "vehicle_no": v.vehicle_no
-        })
-
+    for s, r, v in q.all():
+        results.append({"service_no": s.service_no, "route_name": r.route_name,
+                        "service_type": s.service_type, "ticket_price": s.ticket_price, "vehicle_no": v.vehicle_no})
     return jsonify(results)
 
-@app.route("/api/service/<service_no>")
-def get_service(service_no):
-    res = db.session.query(Service, Route).join(Route).filter(Service.service_no == service_no).first()
-    if not res:
-        return jsonify({"error": "Service not found"}), 404
-    s, r = res
-    return jsonify({"service_no": s.service_no, "route": r.route_name})
-
-@app.route("/api/vehicle/<vehicle_no>")
-def get_vehicle(vehicle_no):
-    res = db.session.query(Vehicle, Service, Route).join(Service).join(Route).filter(Vehicle.vehicle_no == vehicle_no).first()
-    if not res:
-        return jsonify({"error": "Vehicle not found"}), 404
-    v, s, r = res
-    return jsonify({
-        "vehicle_no": v.vehicle_no,
-        "service_no": s.service_no,
-        "route": r.route_name,
-        "status": v.status
-    })
 
 @app.route("/api/timetable")
 def timetable():
     from_station = request.args.get("from", "")
-    to_station = request.args.get("to", "")
-
-    query = db.session.query(Service.service_no, TimetableEntry.arrival_time).join(TimetableEntry).join(Route).join(Stop, TimetableEntry.stop_id == Stop.stop_id)
-    
+    to_station   = request.args.get("to", "")
+    q = db.session.query(Service.service_no, TimetableEntry.arrival_time).join(TimetableEntry).join(Route).join(Stop, TimetableEntry.stop_id == Stop.stop_id)
     condition = or_(
         and_(Route.from_station.ilike(f"%{from_station}%"), Route.to_station.ilike(f"%{to_station}%")),
         and_(Route.from_station.ilike(f"%{to_station}%"), Route.to_station.ilike(f"%{from_station}%"))
     )
-    query = query.filter(condition)
-    query = query.filter(Stop.stop_name.ilike(f"%{from_station}%"))
-    query = query.order_by(TimetableEntry.arrival_time.asc())
+    q = q.filter(condition).filter(Stop.stop_name.ilike(f"%{from_station}%")).order_by(TimetableEntry.arrival_time.asc())
+    return jsonify([{"service_no": sno, "arrival_time": at} for sno, at in q.all()])
 
-    results = []
-    for service_no, arrival_time in query.all():
-        results.append({"service_no": service_no, "arrival_time": arrival_time})
-
-    return jsonify(results)
 
 @app.route("/api/live/<service_no>")
 def live_tracking(service_no):
     res = db.session.query(LiveLocation).join(Vehicle).join(Service).filter(Service.service_no == service_no).first()
     if not res:
         return jsonify({"error": "Live data not found"}), 404
-    
-    return jsonify({
-        "lat": res.lat,
-        "lng": res.lng,
-        "speed": res.speed,
-        "updated_at": res.updated_at
-    })
+    return jsonify({"lat": res.lat, "lng": res.lng, "speed": res.speed, "updated_at": res.updated_at})
+
 
 @app.route("/api/route_details/<service_no>")
 def route_details(service_no):
-    stops = db.session.query(Stop).join(Route).join(Service, Service.route_id == Route.route_id).filter(Service.service_no == service_no).order_by(Stop.stop_order.asc()).all()
+    stops = db.session.query(Stop).join(Route).join(Service, Service.route_id == Route.route_id)\
+        .filter(Service.service_no == service_no).order_by(Stop.stop_order.asc()).all()
     if not stops:
         return jsonify({"error": "Route details not found"}), 404
     return jsonify([{"name": st.stop_name, "lat": st.lat, "lng": st.lng, "stop_order": st.stop_order} for st in stops])
 
 
-# ─── Real ETA Calculation ──────────────────────────────
-@app.route("/api/eta/<service_no>")
-def calculate_eta(service_no):
-    """
-    Calculate real ETA based on bus position, route stops, and current speed.
-    Optional query param: ?destination=StopName to get ETA to a specific stop.
-    """
-    # Get live location
-    live = db.session.query(LiveLocation).join(Vehicle).join(Service).filter(Service.service_no == service_no).first()
-    if not live:
-        return jsonify({"error": "ETA data not found — bus not broadcasting"}), 404
+@app.route("/api/routes")
+@cache.cached(timeout=600)
+def get_all_routes():
+    routes = Route.query.all()
+    return jsonify([{"route_id": r.route_id, "route_name": r.route_name, "from": r.from_station, "to": r.to_station} for r in routes])
 
-    bus_lat, bus_lng = live.lat, live.lng
-    speed = live.speed or 1  # Avoid division by zero
 
-    # Get route stops in order
-    stops = db.session.query(Stop).join(Route).join(Service, Service.route_id == Route.route_id)\
-        .filter(Service.service_no == service_no).order_by(Stop.stop_order.asc()).all()
-
-    if not stops:
-        return jsonify({"error": "Route stops not found"}), 404
-
-    destination_name = request.args.get("destination", "").strip()
-
-    # Find the closest stop to the bus (current position on route)
-    min_dist = float('inf')
-    closest_idx = 0
-    for i, st in enumerate(stops):
-        d = haversine(bus_lat, bus_lng, st.lat, st.lng)
-        if d < min_dist:
-            min_dist = d
-            closest_idx = i
-
-    # Determine destination stop index
-    dest_idx = len(stops) - 1  # Default: last stop (terminal)
-    if destination_name:
-        for i, st in enumerate(stops):
-            if st.stop_name.lower() == destination_name.lower():
-                dest_idx = i
-                break
-
-    # Calculate remaining distance along route from bus to destination
-    remaining_distance = 0.0
-    stops_remaining = 0
-
-    if closest_idx < dest_idx:
-        # Bus is before destination — normal forward travel
-        # Distance from bus to the nearest stop ahead
-        remaining_distance += haversine(bus_lat, bus_lng, stops[closest_idx].lat, stops[closest_idx].lng)
-        # Then sum stop-to-stop distances
-        for i in range(closest_idx, dest_idx):
-            remaining_distance += haversine(stops[i].lat, stops[i].lng, stops[i+1].lat, stops[i+1].lng)
-        stops_remaining = dest_idx - closest_idx
-    elif closest_idx == dest_idx:
-        # Bus is at/near the destination stop
-        remaining_distance = haversine(bus_lat, bus_lng, stops[dest_idx].lat, stops[dest_idx].lng)
-        stops_remaining = 0
-    else:
-        # Bus has passed the destination (reverse direction route?)
-        remaining_distance = haversine(bus_lat, bus_lng, stops[dest_idx].lat, stops[dest_idx].lng)
-        stops_remaining = 0
-
-    # Calculate ETA in minutes
-    eta_minutes = int((remaining_distance / max(speed, 1)) * 60)
-
-    # Calculate stop status
-    dist_to_closest = haversine(bus_lat, bus_lng, stops[closest_idx].lat, stops[closest_idx].lng)
-    bus_status = "En Route"
-    if dist_to_closest < 0.3:
-        bus_status = "At Station"
-    elif dist_to_closest < 1.0:
-        bus_status = "Approaching"
-
-    return jsonify({
-        "service_no": service_no,
-        "remaining_distance_km": round(remaining_distance, 2),
-        "speed_kmph": speed,
-        "eta_minutes": eta_minutes,
-        "stops_remaining": stops_remaining,
-        "destination": stops[dest_idx].stop_name,
-        "closest_stop": stops[closest_idx].stop_name,
-        "bus_status": bus_status,
-        "bus_lat": bus_lat,
-        "bus_lng": bus_lng
-    })
+@app.route("/api/stations")
+@cache.cached(timeout=600)
+def get_all_stations():
+    from_stations = db.session.query(Route.from_station).distinct()
+    to_stations   = db.session.query(Route.to_station).distinct()
+    all_stations  = set([r[0] for r in from_stations.all()] + [r[0] for r in to_stations.all()])
+    return jsonify(list(all_stations))
 
 
 # ═══════════════════════════════════════════════════════
@@ -382,17 +377,13 @@ def calculate_eta(service_no):
 @app.route("/api/user/register", methods=["POST"])
 @limiter.limit("3 per hour")
 def user_register():
-    data = request.json
+    data     = request.json
     username = data.get("username")
     password = data.get("password")
-
     if not username or not password:
         return jsonify({"error": "Missing username or password"}), 400
-
-    hashed_pw = generate_password_hash(password)
-
     try:
-        user = User(username=username, password=hashed_pw, is_admin=False)
+        user = User(username=username, password=generate_password_hash(password), is_admin=False)
         db.session.add(user)
         db.session.commit()
         return jsonify({"message": "Registration successful! Please login."})
@@ -403,32 +394,29 @@ def user_register():
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+
 @app.route("/api/user/login", methods=["POST"])
 @limiter.limit("10 per minute")
 def user_login():
-    data = request.json
+    data     = request.json
     username = data.get("username")
     password = data.get("password")
     remember = data.get("remember", False)
-
     try:
         user = User.query.filter_by(username=username).first()
-
         if user and check_password_hash(user.password, password):
             session.clear()
-            session["user_id"] = user.id
+            session["user_id"]  = user.id
             session["username"] = user.username
             session["is_admin"] = user.is_admin
-            session.permanent = True if remember else False
-
+            session.permanent   = bool(remember)
             redirect_url = "/admin" if user.is_admin else "/"
             return jsonify({"message": "Login successful", "redirect": redirect_url, "is_admin": user.is_admin})
-        
         return jsonify({"error": "Invalid credentials"}), 401
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": f"Database Server Error: {str(e)}"}), 500
+        import traceback; traceback.print_exc()
+        return jsonify({"error": f"Server Error: {str(e)}"}), 500
+
 
 @app.route("/api/user/logout", methods=["POST"])
 def user_logout():
@@ -437,26 +425,23 @@ def user_logout():
 
 
 # ═══════════════════════════════════════════════════════
-# DRIVER AUTH (with service linking)
+# DRIVER AUTH
 # ═══════════════════════════════════════════════════════
 
 @app.route("/api/driver/login", methods=["POST"])
 @limiter.limit("5 per minute")
 def driver_login():
-    data = request.json
+    data     = request.json
     username = data.get("username")
     password = data.get("password")
-
     try:
         driver = Driver.query.filter_by(username=username).first()
-
         if driver and check_password_hash(driver.password, password):
             session.clear()
             session["driver_id"] = driver.id
-            session["username"] = driver.username
-            session.permanent = True
+            session["username"]  = driver.username
+            session.permanent    = True
 
-            # Include assigned service info
             assigned_service = None
             if driver.assigned_service_id:
                 svc = Service.query.get(driver.assigned_service_id)
@@ -466,75 +451,54 @@ def driver_login():
                         "service_no": svc.service_no,
                         "route": svc.route.route_name if svc.route else ""
                     }
-            
             session["assigned_service_no"] = assigned_service["service_no"] if assigned_service else None
-
-            return jsonify({
-                "message": "Login successful",
-                "redirect": "/driver",
-                "assigned_service": assigned_service
-            })
-        
+            return jsonify({"message": "Login successful", "redirect": "/driver", "assigned_service": assigned_service})
         return jsonify({"error": "Invalid credentials"}), 401
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": f"Database Server Error: {str(e)}"}), 500
+        import traceback; traceback.print_exc()
+        return jsonify({"error": f"Server Error: {str(e)}"}), 500
+
 
 @app.route("/api/driver/logout", methods=["POST"])
 def driver_logout():
     session.clear()
     return jsonify({"message": "Logged out", "redirect": "/driver/login"})
 
+
 @app.route("/api/driver/info")
 def driver_info():
-    """Get current driver's info including assigned service."""
     if "driver_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
-
     driver = Driver.query.get(session["driver_id"])
     if not driver:
         return jsonify({"error": "Driver not found"}), 404
-
     assigned_service = None
     if driver.assigned_service_id:
         svc = Service.query.get(driver.assigned_service_id)
         if svc:
-            assigned_service = {
-                "service_id": svc.service_id,
-                "service_no": svc.service_no,
-                "route": svc.route.route_name if svc.route else ""
-            }
-
-    return jsonify({
-        "driver_id": driver.id,
-        "username": driver.username,
-        "assigned_service": assigned_service
-    })
+            assigned_service = {"service_id": svc.service_id, "service_no": svc.service_no,
+                                "route": svc.route.route_name if svc.route else ""}
+    return jsonify({"driver_id": driver.id, "username": driver.username, "assigned_service": assigned_service})
 
 
 # ═══════════════════════════════════════════════════════
-# LOCATION UPDATE (with driver-service enforcement + WebSocket broadcast)
+# LOCATION UPDATE
 # ═══════════════════════════════════════════════════════
-
-DEBUG_LOGS = []
 
 @app.route("/api/debug")
 def get_debug_logs():
     return jsonify(DEBUG_LOGS[-20:])
 
+
 @app.route("/api/update_location", methods=["POST"])
 def update_location():
     try:
-        data = request.json
-        if not data:
-            return jsonify({"error": "No JSON data received"}), 400
-            
+        data       = request.json
         service_no = data.get("service_no")
-        lat = data.get("lat")
-        lng = data.get("lng")
-        speed = data.get("speed", 0)
-        
+        lat        = data.get("lat")
+        lng        = data.get("lng")
+        speed      = data.get("speed", 0)
+
         log_entry = f"{time.strftime('%H:%M:%S')}: Received {service_no} at {lat}, {lng}"
         print(log_entry, flush=True)
         DEBUG_LOGS.append(log_entry)
@@ -542,85 +506,34 @@ def update_location():
         if not service_no or not lat or not lng:
             return jsonify({"error": "Missing data"}), 400
 
-        # ── Driver-Service Linking Enforcement ──
         if "driver_id" in session:
             driver = Driver.query.get(session["driver_id"])
             if driver and driver.assigned_service_id:
                 assigned_svc = Service.query.get(driver.assigned_service_id)
                 if assigned_svc and assigned_svc.service_no != service_no:
-                    return jsonify({"error": f"You are assigned to service {assigned_svc.service_no}, not {service_no}"}), 403
+                    return jsonify({"error": f"Assigned to {assigned_svc.service_no}, not {service_no}"}), 403
 
         v = db.session.query(Vehicle).join(Service).filter(Service.service_no == service_no).first()
         if not v:
             return jsonify({"error": "Service/Vehicle not found"}), 404
 
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-
         loc = LiveLocation.query.filter_by(bus_id=v.vehicle_id).first()
         if loc:
-            loc.lat = lat
-            loc.lng = lng
-            loc.speed = speed
-            loc.updated_at = timestamp
+            loc.lat = lat; loc.lng = lng; loc.speed = speed; loc.updated_at = timestamp
         else:
-            loc = LiveLocation(bus_id=v.vehicle_id, lat=lat, lng=lng, speed=speed, updated_at=timestamp)
-            db.session.add(loc)
-
+            db.session.add(LiveLocation(bus_id=v.vehicle_id, lat=lat, lng=lng, speed=speed, updated_at=timestamp))
         db.session.commit()
-
-        log_entry = f"{time.strftime('%H:%M:%S')}: [OK] Updated DB for vehicle {v.vehicle_id}"
-        print(log_entry, flush=True)
-        DEBUG_LOGS.append(log_entry)
-
         return jsonify({"message": "Location updated", "time": timestamp, "vehicle_id": v.vehicle_id})
-
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
 # ═══════════════════════════════════════════════════════
-# PUBLIC DATA APIs (cached)
+# ADMIN APIs
 # ═══════════════════════════════════════════════════════
 
-@app.route("/api/routes")
-@cache.cached(timeout=600)
-def get_all_routes():
-    routes = Route.query.all()
-    return jsonify([{"route_id": r.route_id, "route_name": r.route_name, "from": r.from_station, "to": r.to_station} for r in routes])
-
-@app.route("/api/stations")
-@cache.cached(timeout=600)
-def get_all_stations():
-    from_stations = db.session.query(Route.from_station).distinct()
-    to_stations = db.session.query(Route.to_station).distinct()
-    all_stations = set([r[0] for r in from_stations.all()] + [r[0] for r in to_stations.all()])
-    return jsonify(list(all_stations))
-
-@app.route("/api/dashboard")
-@cache.cached(timeout=60)
-def dashboard():
-    routes = Route.query.count()
-    services = Service.query.count()
-    vehicles = Vehicle.query.count()
-    running = Vehicle.query.filter_by(status='Running').count()
-    drivers = Driver.query.count()
-
-    return jsonify({
-        "total_routes": routes,
-        "total_services": services,
-        "total_vehicles": vehicles,
-        "running_buses": running,
-        "total_drivers": drivers
-    })
-
-
-# ═══════════════════════════════════════════════════════
-# ADMIN APIs (all protected by @admin_required)
-# ═══════════════════════════════════════════════════════
-
-# ── List All ──
 @app.route("/api/admin/routes")
 @admin_required
 def admin_list_routes():
@@ -631,122 +544,82 @@ def admin_list_routes():
 @admin_required
 def admin_list_services():
     services = db.session.query(Service, Route).join(Route).all()
-    return jsonify([{
-        "service_id": s.service_id,
-        "service_no": s.service_no,
-        "route_id": s.route_id,
-        "route_name": r.route_name,
-        "service_type": s.service_type,
-        "ticket_price": s.ticket_price
-    } for s, r in services])
+    return jsonify([{"service_id": s.service_id, "service_no": s.service_no, "route_id": s.route_id,
+                     "route_name": r.route_name, "service_type": s.service_type, "ticket_price": s.ticket_price}
+                    for s, r in services])
 
 @app.route("/api/admin/vehicles")
 @admin_required
 def admin_list_vehicles():
     vehicles = db.session.query(Vehicle, Service).join(Service).all()
-    return jsonify([{
-        "vehicle_id": v.vehicle_id,
-        "vehicle_no": v.vehicle_no,
-        "service_id": v.service_id,
-        "service_no": s.service_no,
-        "status": v.status
-    } for v, s in vehicles])
+    return jsonify([{"vehicle_id": v.vehicle_id, "vehicle_no": v.vehicle_no, "service_id": v.service_id,
+                     "service_no": s.service_no, "status": v.status} for v, s in vehicles])
 
 @app.route("/api/admin/stops")
 @admin_required
 def admin_list_stops():
     stops = db.session.query(Stop, Route).join(Route).order_by(Stop.route_id, Stop.stop_order).all()
-    return jsonify([{
-        "stop_id": st.stop_id,
-        "route_id": st.route_id,
-        "route_name": r.route_name,
-        "stop_name": st.stop_name,
-        "lat": st.lat,
-        "lng": st.lng,
-        "stop_order": st.stop_order
-    } for st, r in stops])
+    return jsonify([{"stop_id": st.stop_id, "route_id": st.route_id, "route_name": r.route_name,
+                     "stop_name": st.stop_name, "lat": st.lat, "lng": st.lng, "stop_order": st.stop_order}
+                    for st, r in stops])
 
 @app.route("/api/admin/drivers")
 @admin_required
 def admin_list_drivers():
     drivers = Driver.query.all()
-    result = []
+    result  = []
     for d in drivers:
         svc_info = None
         if d.assigned_service_id:
             svc = Service.query.get(d.assigned_service_id)
             if svc:
                 svc_info = {"service_id": svc.service_id, "service_no": svc.service_no}
-        result.append({
-            "id": d.id,
-            "username": d.username,
-            "assigned_service": svc_info
-        })
+        result.append({"id": d.id, "username": d.username, "assigned_service": svc_info})
     return jsonify(result)
 
-# ── Create ──
 @app.route("/api/admin/add_route", methods=["POST"])
 @admin_required
 def add_route():
-    data = request.json
-    r = Route(route_name=data["route_name"], from_station=data["from"], to_station=data["to"])
-    db.session.add(r)
-    db.session.commit()
-    cache.clear()
-    return jsonify({"message": "Route added successfully", "route_id": r.route_id})
+    d = request.json
+    r = Route(route_name=d["route_name"], from_station=d["from"], to_station=d["to"])
+    db.session.add(r); db.session.commit(); cache.clear()
+    return jsonify({"message": "Route added", "route_id": r.route_id})
 
 @app.route("/api/admin/add_service", methods=["POST"])
 @admin_required
 def add_service():
-    data = request.json
-    s = Service(
-        service_no=data["service_no"],
-        route_id=data["route_id"],
-        service_type=data.get("service_type", "Express"),
-        ticket_price=data.get("ticket_price", 0)
-    )
-    db.session.add(s)
-    db.session.commit()
-    cache.clear()
-    return jsonify({"message": "Service added successfully", "service_id": s.service_id})
+    d = request.json
+    s = Service(service_no=d["service_no"], route_id=d["route_id"],
+                service_type=d.get("service_type", "Express"), ticket_price=d.get("ticket_price", 0))
+    db.session.add(s); db.session.commit(); cache.clear()
+    return jsonify({"message": "Service added", "service_id": s.service_id})
 
 @app.route("/api/admin/add_vehicle", methods=["POST"])
 @admin_required
 def add_vehicle():
-    data = request.json
-    v = Vehicle(vehicle_no=data["vehicle_no"], service_id=data["service_id"], status=data.get("status", "Running"))
-    db.session.add(v)
-    db.session.commit()
-    cache.clear()
-    return jsonify({"message": "Vehicle added successfully", "vehicle_id": v.vehicle_id})
+    d = request.json
+    v = Vehicle(vehicle_no=d["vehicle_no"], service_id=d["service_id"], status=d.get("status", "Running"))
+    db.session.add(v); db.session.commit(); cache.clear()
+    return jsonify({"message": "Vehicle added", "vehicle_id": v.vehicle_id})
 
 @app.route("/api/admin/add_stop", methods=["POST"])
 @admin_required
 def add_stop():
-    data = request.json
-    st = Stop(
-        route_id=data["route_id"],
-        stop_name=data["stop_name"],
-        lat=data.get("lat", 0.0),
-        lng=data.get("lng", 0.0),
-        stop_order=data.get("stop_order", 1)
-    )
-    db.session.add(st)
-    db.session.commit()
-    cache.clear()
-    return jsonify({"message": "Stop added successfully", "stop_id": st.stop_id})
+    d = request.json
+    st = Stop(route_id=d["route_id"], stop_name=d["stop_name"],
+              lat=d.get("lat", 0.0), lng=d.get("lng", 0.0), stop_order=d.get("stop_order", 1))
+    db.session.add(st); db.session.commit(); cache.clear()
+    return jsonify({"message": "Stop added", "stop_id": st.stop_id})
 
 @app.route("/api/admin/assign_driver", methods=["POST"])
 @admin_required
 def assign_driver():
-    data = request.json
-    driver_id = data.get("driver_id")
-    service_id = data.get("service_id")  # Can be None to unassign
-
+    d          = request.json
+    driver_id  = d.get("driver_id")
+    service_id = d.get("service_id")
     driver = Driver.query.get(driver_id)
     if not driver:
         return jsonify({"error": "Driver not found"}), 404
-
     if service_id:
         svc = Service.query.get(service_id)
         if not svc:
@@ -754,85 +627,136 @@ def assign_driver():
         driver.assigned_service_id = service_id
     else:
         driver.assigned_service_id = None
-
     db.session.commit()
     return jsonify({"message": "Driver assignment updated"})
 
-# ── Delete ──
+@app.route("/api/admin/add_driver", methods=["POST"])
+@admin_required
+def add_driver():
+    d        = request.json
+    username = d.get("username")
+    password = d.get("password")
+    if not username or not password:
+        return jsonify({"error": "Missing username or password"}), 400
+    try:
+        driver = Driver(username=username, password=generate_password_hash(password))
+        db.session.add(driver); db.session.commit()
+        return jsonify({"message": "Driver added", "id": driver.id})
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Username already exists"}), 409
+
 @app.route("/api/admin/delete_route/<int:route_id>", methods=["DELETE"])
 @admin_required
 def delete_route(route_id):
     r = Route.query.get(route_id)
-    if not r:
-        return jsonify({"error": "Route not found"}), 404
-    db.session.delete(r)
-    db.session.commit()
-    cache.clear()
+    if not r: return jsonify({"error": "Route not found"}), 404
+    db.session.delete(r); db.session.commit(); cache.clear()
     return jsonify({"message": "Route deleted"})
 
 @app.route("/api/admin/delete_service/<int:service_id>", methods=["DELETE"])
 @admin_required
 def delete_service(service_id):
     s = Service.query.get(service_id)
-    if not s:
-        return jsonify({"error": "Service not found"}), 404
-    db.session.delete(s)
-    db.session.commit()
-    cache.clear()
+    if not s: return jsonify({"error": "Service not found"}), 404
+    db.session.delete(s); db.session.commit(); cache.clear()
     return jsonify({"message": "Service deleted"})
 
 @app.route("/api/admin/delete_vehicle/<int:vehicle_id>", methods=["DELETE"])
 @admin_required
 def delete_vehicle(vehicle_id):
     v = Vehicle.query.get(vehicle_id)
-    if not v:
-        return jsonify({"error": "Vehicle not found"}), 404
-    db.session.delete(v)
-    db.session.commit()
-    cache.clear()
+    if not v: return jsonify({"error": "Vehicle not found"}), 404
+    db.session.delete(v); db.session.commit(); cache.clear()
     return jsonify({"message": "Vehicle deleted"})
 
 @app.route("/api/admin/delete_stop/<int:stop_id>", methods=["DELETE"])
 @admin_required
 def delete_stop(stop_id):
     st = Stop.query.get(stop_id)
-    if not st:
-        return jsonify({"error": "Stop not found"}), 404
-    db.session.delete(st)
-    db.session.commit()
-    cache.clear()
+    if not st: return jsonify({"error": "Stop not found"}), 404
+    db.session.delete(st); db.session.commit(); cache.clear()
     return jsonify({"message": "Stop deleted"})
 
 @app.route("/api/admin/delete_driver/<int:driver_id>", methods=["DELETE"])
 @admin_required
 def delete_driver(driver_id):
     d = Driver.query.get(driver_id)
-    if not d:
-        return jsonify({"error": "Driver not found"}), 404
-    db.session.delete(d)
-    db.session.commit()
+    if not d: return jsonify({"error": "Driver not found"}), 404
+    db.session.delete(d); db.session.commit()
     return jsonify({"message": "Driver deleted"})
 
-# ── Admin Create Admin User ──
 @app.route("/api/admin/create_admin", methods=["POST"])
 @admin_required
 def create_admin_user():
-    data = request.json
-    username = data.get("username")
-    password = data.get("password")
-
+    d = request.json
+    username = d.get("username")
+    password = d.get("password")
     if not username or not password:
         return jsonify({"error": "Missing username or password"}), 400
-
-    hashed_pw = generate_password_hash(password)
     try:
-        user = User(username=username, password=hashed_pw, is_admin=True)
-        db.session.add(user)
-        db.session.commit()
-        return jsonify({"message": "Admin user created successfully"})
+        user = User(username=username, password=generate_password_hash(password), is_admin=True)
+        db.session.add(user); db.session.commit()
+        return jsonify({"message": "Admin user created"})
     except IntegrityError:
         db.session.rollback()
         return jsonify({"error": "Username already exists"}), 409
+
+@app.route("/api/admin/force_seed")
+def force_seed():
+    """Emergency: re-seed bus schedule data."""
+    try:
+        BusSchedule.query.delete()
+        db.session.commit()
+        from seed_data import seed_bus_schedule
+        seed_bus_schedule(db, BusSchedule)
+        return jsonify({"message": "Bus schedule re-seeded successfully!"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════
+# ETA Calculation
+# ═══════════════════════════════════════════════════════
+
+@app.route("/api/eta/<service_no>")
+def calculate_eta(service_no):
+    live = db.session.query(LiveLocation).join(Vehicle).join(Service).filter(Service.service_no == service_no).first()
+    if not live:
+        return jsonify({"error": "Bus not broadcasting"}), 404
+    bus_lat, bus_lng = live.lat, live.lng
+    speed = live.speed or 1
+    stops = db.session.query(Stop).join(Route).join(Service, Service.route_id == Route.route_id)\
+        .filter(Service.service_no == service_no).order_by(Stop.stop_order.asc()).all()
+    if not stops:
+        return jsonify({"error": "Route stops not found"}), 404
+    destination_name = request.args.get("destination", "").strip()
+    min_dist, closest_idx = float('inf'), 0
+    for i, st in enumerate(stops):
+        d = haversine(bus_lat, bus_lng, st.lat, st.lng)
+        if d < min_dist:
+            min_dist = d; closest_idx = i
+    dest_idx = len(stops) - 1
+    if destination_name:
+        for i, st in enumerate(stops):
+            if st.stop_name.lower() == destination_name.lower():
+                dest_idx = i; break
+    remaining_distance = 0.0
+    stops_remaining = 0
+    if closest_idx < dest_idx:
+        remaining_distance += haversine(bus_lat, bus_lng, stops[closest_idx].lat, stops[closest_idx].lng)
+        for i in range(closest_idx, dest_idx):
+            remaining_distance += haversine(stops[i].lat, stops[i].lng, stops[i+1].lat, stops[i+1].lng)
+        stops_remaining = dest_idx - closest_idx
+    else:
+        remaining_distance = haversine(bus_lat, bus_lng, stops[dest_idx].lat, stops[dest_idx].lng)
+    eta_minutes = int((remaining_distance / max(speed, 1)) * 60)
+    dist_to_closest = haversine(bus_lat, bus_lng, stops[closest_idx].lat, stops[closest_idx].lng)
+    bus_status = "At Station" if dist_to_closest < 0.3 else ("Approaching" if dist_to_closest < 1.0 else "En Route")
+    return jsonify({"service_no": service_no, "remaining_distance_km": round(remaining_distance, 2),
+                    "speed_kmph": speed, "eta_minutes": eta_minutes, "stops_remaining": stops_remaining,
+                    "destination": stops[dest_idx].stop_name, "closest_stop": stops[closest_idx].stop_name,
+                    "bus_status": bus_status, "bus_lat": bus_lat, "bus_lng": bus_lng})
 
 
 # ═══════════════════════════════════════════════════════
@@ -840,6 +764,6 @@ def create_admin_user():
 # ═══════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    port = int(os.getenv('PORT', 5000))
+    port  = int(os.getenv('PORT', 5000))
     debug = os.getenv('FLASK_ENV', 'development') != 'production'
     app.run(host='0.0.0.0', port=port, debug=debug)

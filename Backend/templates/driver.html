@@ -1,471 +1,222 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Driver Dashboard - APSRTC Live</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
-    <style>
-        body {
-            background: linear-gradient(135deg, #e0f7fa, #e8f5e9);
-            min-height: 100vh;
-        }
-        .card-box {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            border-radius: 16px;
-            padding: 24px;
-        }
-        .btn {
-            border-radius: 12px;
-            font-weight: 600;
-        }
-        .btn-success { background-color: #00A859; border: none; }
-        .btn-success:hover { background-color: #008a48; }
-        #statusContainer {
-            background: rgba(255, 255, 255, 0.9) !important;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
-            border: 1px solid #e0e0e0;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Driver Dashboard — APSRTC Live</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    body { background: var(--bg); }
+    .driver-main { max-width: 680px; margin: 0 auto; padding: 1.5rem; }
+    .location-card { background: #fff; border-radius: var(--radius-lg); padding: 1.75rem; box-shadow: var(--shadow); border: 1px solid var(--border); }
+    .coord-box { background: var(--bg); border-radius: var(--radius); padding: 1rem; font-family: monospace; font-size: 0.9rem; color: var(--text-muted); text-align: center; min-height: 48px; display: flex; align-items: center; justify-content: center; }
+    .status-indicator { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; font-weight: 600; }
+    .dot-live  { width: 8px; height: 8px; border-radius: 50%; background: var(--success); animation: blink 1.2s infinite; }
+    .dot-off   { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+    .log-box { background: #1a1a2e; color: #a8ff78; font-family: monospace; font-size: 0.8rem; border-radius: var(--radius); padding: 1rem; max-height: 200px; overflow-y: auto; }
+  </style>
 </head>
-
 <body>
 
-    <div class="container mt-4 mb-5" style="max-width: 500px;">
-        <div class="card-box">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h3 class="m-0 card-title"><i class="bi bi-person-badge-fill"></i> Driver</h3>
-                <div>
-                    <span class="badge bg-secondary me-2">{{ username }}</span>
-                    <button class="btn btn-outline-danger btn-sm rounded-pill" onclick="logout()">Logout</button>
-                </div>
-            </div>
+<!-- Header -->
+<header class="app-header">
+  <div class="header-logo">
+    <div class="header-logo-icon" style="background:var(--orange);">🚗</div>
+    <div><div>Driver Dashboard</div><div class="header-subtitle">APSRTC Live Tracker</div></div>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="header-clock" id="headerClock"></div>
+  <div style="display:flex;align-items:center;gap:0.75rem;">
+    <span style="font-size:0.875rem;color:rgba(255,255,255,0.8);">🚗 {{ username }}</span>
+    <button class="btn btn-ghost btn-sm" style="color:#fff;border-color:rgba(255,255,255,0.3);" onclick="logout()">Logout</button>
+  </div>
+</header>
 
-            <!-- Assignment Status Banner -->
-            <div id="assignmentBanner" class="mb-4 p-3 rounded-3 text-center" style="display: none;">
-            </div>
+<div class="driver-main">
 
-            <div class="mb-4">
-                <label class="form-label fw-bold small text-muted">SELECT SERVICE NUMBER</label>
-                <select id="serviceSelect" class="form-select form-select-lg">
-                    <option value="">Loading...</option>
-                </select>
-                <div id="serviceHint" class="form-text small"></div>
-            </div>
+  <!-- Assigned Route Card -->
+  <div class="driver-card" style="margin-bottom:1.25rem;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;">
+      <div>
+        <div style="font-size:0.85rem;opacity:0.75;margin-bottom:0.25rem;">Assigned Service</div>
+        <div style="font-size:2rem;font-weight:800;" id="assignedServiceNo">—</div>
+      </div>
+      <div id="liveStatusBadge" class="status-indicator"><span class="dot-off"></span> Offline</div>
+    </div>
+    <div id="assignedRoute" style="opacity:0.85;font-size:0.95rem;">Loading your assignment...</div>
+    <div style="margin-top:0.75rem;font-size:0.8rem;opacity:0.65;" id="lastUpdateTime"></div>
+  </div>
 
-            <div class="d-grid gap-3">
-                <button id="startBtn" class="btn btn-success btn-lg shadow-sm">
-                    <i class="bi bi-broadcast"></i> Start Sharing
-                </button>
-                <button id="stopBtn" class="btn btn-danger btn-lg" style="display: none;">
-                    <i class="bi bi-stop-circle"></i> Stop Sharing
-                </button>
-            </div>
+  <!-- Location Broadcast Card -->
+  <div class="location-card" style="margin-bottom:1.25rem;">
+    <h3 style="margin-bottom:1rem;">📍 Location Broadcast</h3>
+    <div class="coord-box" id="coordDisplay">Press the button below to start sharing your location</div>
 
-            <!-- Status Indicator -->
-            <div id="statusContainer" class="mt-4 p-3 rounded-3 text-center bg-light">
-                <div class="small text-muted mb-1">STATUS</div>
-                <div class="fw-bold fs-5 status-text">Inactive ⚪</div>
-            </div>
-
-            <div id="debugLog" class="mt-3 small text-muted font-monospace"
-                style="height: 120px; overflow-y: auto; background: #eee; padding: 10px; border-radius: 8px;">
-                Logs will appear here...
-            </div>
-        </div>
+    <div style="margin-top:1.25rem;display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+      <div>
+        <div class="form-label" style="margin-bottom:0.3rem;">Speed (km/h)</div>
+        <input type="number" id="speedInput" class="form-control" value="0" min="0" max="120" placeholder="Current speed">
+      </div>
+      <div>
+        <div class="form-label" style="margin-bottom:0.3rem;">Service Override</div>
+        <input type="text" id="serviceInput" class="form-control" placeholder="Auto-filled" id="serviceOverride">
+      </div>
     </div>
 
-    <script>
-        // ─────────────────────────────────────────────
-        // STATE
-        // ─────────────────────────────────────────────
-        let watchId        = null;
-        let wakeLock       = null;
-        let heartbeatTimer = null;
-        let activeService  = null;
-        let lastCoords     = null;
-        let offlineQueue   = [];
-        let isTracking     = false;
-        let driverAssignment = null; // { service_id, service_no, route }
+    <div style="margin-top:1.25rem;display:flex;gap:0.75rem;flex-wrap:wrap;">
+      <button class="location-btn" style="flex:1;" id="startBtn" onclick="startBroadcast()">
+        📡 Start Broadcasting Location
+      </button>
+      <button class="btn btn-ghost" style="flex:0 0 auto;" id="stopBtn" onclick="stopBroadcast()" disabled>Stop</button>
+    </div>
 
-        const startBtn        = document.getElementById("startBtn");
-        const stopBtn         = document.getElementById("stopBtn");
-        const serviceSelect   = document.getElementById("serviceSelect");
-        const statusContainer = document.getElementById("statusContainer");
-        const debugLog        = document.getElementById("debugLog");
+    <div style="margin-top:0.75rem;" id="broadcastStatus"></div>
+  </div>
 
-        const GPS_OPTIONS = {
-            enableHighAccuracy: true,
-            maximumAge: 5000,
-            timeout: 30000
-        };
+  <!-- Log -->
+  <div class="location-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+      <h4>📋 Broadcast Log</h4>
+      <button class="btn btn-ghost btn-sm" onclick="clearLog()">Clear</button>
+    </div>
+    <div class="log-box" id="logBox">Waiting for broadcast to start...</div>
+  </div>
 
-        // ─────────────────────────────────────────────
-        // DRIVER INFO & SERVICE ASSIGNMENT
-        // ─────────────────────────────────────────────
-        async function loadDriverInfo() {
-            try {
-                const res = await fetch('/api/driver/info');
-                if (!res.ok) return;
-                const info = await res.json();
+</div>
 
-                driverAssignment = info.assigned_service;
+<div id="toast-container"></div>
 
-                const banner = document.getElementById('assignmentBanner');
-                const hint = document.getElementById('serviceHint');
+<script>
+// ── Clock ──────────────────────────────────────────────
+function updateClock() {
+  const now  = new Date();
+  const time = now.toLocaleString('en-IN', { timeZone:'Asia/Kolkata', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false });
+  const date = now.toLocaleString('en-IN', { timeZone:'Asia/Kolkata', weekday:'short', day:'2-digit', month:'short' });
+  document.getElementById('headerClock').innerHTML = `<strong>${time} IST</strong><br>${date}`;
+}
+setInterval(updateClock, 1000); updateClock();
 
-                if (driverAssignment) {
-                    // Driver is assigned to a specific service
-                    banner.style.display = 'block';
-                    banner.className = 'mb-4 p-3 rounded-3 text-center bg-success bg-opacity-10 border border-success';
-                    banner.innerHTML = `
-                        <div class="small text-success fw-bold mb-1"><i class="bi bi-check-circle-fill"></i> ASSIGNED SERVICE</div>
-                        <div class="fw-bold fs-5 text-success">${driverAssignment.service_no}</div>
-                        <div class="small text-muted">${driverAssignment.route}</div>
-                    `;
+// ── Driver Info ────────────────────────────────────────
+let assignedServiceNo = null;
+async function loadDriverInfo() {
+  try {
+    const res  = await fetch('/api/driver/info');
+    if (res.status === 401) { window.location.href = '/driver/login'; return; }
+    const data = await res.json();
+    if (data.assigned_service) {
+      assignedServiceNo = data.assigned_service.service_no;
+      document.getElementById('assignedServiceNo').textContent = assignedServiceNo;
+      document.getElementById('assignedRoute').textContent = data.assigned_service.route || 'Route details unavailable';
+      document.getElementById('serviceInput').value = assignedServiceNo;
+    } else {
+      document.getElementById('assignedServiceNo').textContent = 'Unassigned';
+      document.getElementById('assignedRoute').textContent = 'No service assigned. Contact admin.';
+    }
+  } catch(e) { addLog('Failed to load driver info: ' + e.message, 'error'); }
+}
 
-                    // Lock service dropdown to assigned service only
-                    serviceSelect.innerHTML = `<option value="${driverAssignment.service_no}" selected>${driverAssignment.service_no} (${driverAssignment.route})</option>`;
-                    serviceSelect.disabled = true;
-                    hint.innerHTML = '<i class="bi bi-lock-fill"></i> You can only share location for your assigned service.';
-                    hint.className = 'form-text small text-success';
+// ── Broadcast ──────────────────────────────────────────
+let broadcastInterval = null;
+let watchId = null;
 
-                } else {
-                    // Driver is NOT assigned — show all services but with warning
-                    banner.style.display = 'block';
-                    banner.className = 'mb-4 p-3 rounded-3 text-center bg-warning bg-opacity-10 border border-warning';
-                    banner.innerHTML = `
-                        <div class="small text-warning fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill"></i> NO ASSIGNMENT</div>
-                        <div class="small text-muted">Contact admin to get assigned to a service. You can still share temporarily.</div>
-                    `;
+function setLiveStatus(live) {
+  const el = document.getElementById('liveStatusBadge');
+  el.innerHTML = live
+    ? '<span class="dot-live"></span> Live Broadcasting'
+    : '<span class="dot-off"></span> Offline';
+  el.style.color = live ? 'var(--success)' : '';
+}
 
-                    // Load all available services
-                    await loadAllServices();
-                    hint.innerHTML = '<i class="bi bi-info-circle"></i> Select a service to share location for.';
-                    hint.className = 'form-text small text-muted';
-                }
+async function sendLocation(lat, lng, speed) {
+  const serviceNo = document.getElementById('serviceInput').value || assignedServiceNo;
+  if (!serviceNo) { addLog('No service number! Contact admin.', 'error'); return; }
 
-            } catch(e) {
-                console.error('Failed to load driver info:', e);
-                await loadAllServices();
-            }
-        }
+  try {
+    const res = await fetch('/api/update_location', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ service_no: serviceNo, lat, lng, speed: +speed })
+    });
+    const d = await res.json();
+    const ist = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false });
+    if (res.ok) {
+      addLog(`[${ist}] ✅ Location sent: ${lat.toFixed(5)}, ${lng.toFixed(5)} @ ${speed} km/h`);
+      document.getElementById('coordDisplay').textContent = `📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      document.getElementById('lastUpdateTime').textContent = `Last update: ${ist} IST`;
+    } else {
+      addLog(`[${ist}] ❌ Error: ${d.error}`, 'error');
+    }
+  } catch(e) { addLog('Network error: ' + e.message, 'error'); }
+}
 
-        async function loadAllServices() {
-            try {
-                const res = await fetch('/api/routes');
-                if (!res.ok) return;
-                // Fallback: use hardcoded services since we don't have a public services list
-                serviceSelect.innerHTML = `
-                    <option value="28A">28A (Gajuwaka - Beach Road)</option>
-                    <option value="6K">6K (Maddilapalem - Simhachalam)</option>
-                    <option value="400K">400K (RTC Complex - Railway Stn)</option>
-                `;
-            } catch(e) {
-                serviceSelect.innerHTML = `
-                    <option value="28A">28A (Gajuwaka - Beach Road)</option>
-                    <option value="6K">6K (Maddilapalem - Simhachalam)</option>
-                    <option value="400K">400K (RTC Complex - Railway Stn)</option>
-                `;
-            }
-        }
+function startBroadcast() {
+  if (!navigator.geolocation) { showToast('Geolocation not supported', 'error'); return; }
 
-        // Load driver info on page load
-        loadDriverInfo();
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('startBtn').textContent = '📡 Broadcasting...';
+  document.getElementById('stopBtn').disabled = false;
+  setLiveStatus(true);
 
-        // ─────────────────────────────────────────────
-        // LOGGING
-        // ─────────────────────────────────────────────
-        function log(msg) {
-            const time = new Date().toLocaleTimeString();
-            const div  = document.createElement("div");
-            div.innerHTML = `<span style="color:#888;">[${time}]</span> ${msg}`;
-            debugLog.insertBefore(div, debugLog.firstChild);
-            if (debugLog.children.length > 60) debugLog.removeChild(debugLog.lastChild);
-        }
+  watchId = navigator.geolocation.watchPosition(
+    pos => {
+      const { latitude, longitude, speed } = pos.coords;
+      const spd = speed ? Math.round(speed * 3.6) : +document.getElementById('speedInput').value || 0;
+      sendLocation(latitude, longitude, spd);
+    },
+    err => addLog('GPS error: ' + err.message, 'error'),
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+  );
 
-        // ─────────────────────────────────────────────
-        // SCREEN WAKE LOCK
-        // ─────────────────────────────────────────────
-        async function acquireWakeLock() {
-            if (!('wakeLock' in navigator)) {
-                log("ℹ️ Wake Lock API not supported on this browser.");
-                return;
-            }
-            try {
-                wakeLock = await navigator.wakeLock.request('screen');
-                log("🔆 Wake Lock acquired — screen will stay on.");
-                wakeLock.addEventListener('release', () => {
-                    log("💤 Wake Lock released by system.");
-                    wakeLock = null;
-                });
-            } catch (err) {
-                log(`⚠️ Wake Lock failed: ${err.message}`);
-            }
-        }
+  // Fallback interval in case watchPosition is slow
+  broadcastInterval = setInterval(() => {
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const spd = +document.getElementById('speedInput').value || 0;
+        sendLocation(pos.coords.latitude, pos.coords.longitude, spd);
+      },
+      err => addLog('GPS: ' + err.message, 'error'),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }, 15000);
+}
 
-        async function releaseWakeLock() {
-            if (wakeLock) {
-                await wakeLock.release().catch(() => {});
-                wakeLock = null;
-            }
-        }
+function stopBroadcast() {
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  if (broadcastInterval) { clearInterval(broadcastInterval); broadcastInterval = null; }
+  document.getElementById('startBtn').disabled = false;
+  document.getElementById('startBtn').textContent = '📡 Start Broadcasting Location';
+  document.getElementById('stopBtn').disabled = true;
+  setLiveStatus(false);
+  addLog('Broadcast stopped.');
+}
 
-        // ─────────────────────────────────────────────
-        // GPS CALLBACKS
-        // ─────────────────────────────────────────────
-        function onLocationSuccess(pos) {
-            const { latitude, longitude, speed } = pos.coords;
-            const speedKmph = speed ? (speed * 3.6).toFixed(1) : 0;
+// ── Log ────────────────────────────────────────────────
+function addLog(msg, type) {
+  const box = document.getElementById('logBox');
+  const line = document.createElement('div');
+  line.textContent = msg;
+  if (type === 'error') line.style.color = '#ff6b6b';
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+function clearLog() { document.getElementById('logBox').innerHTML = ''; }
 
-            lastCoords = { lat: latitude, lng: longitude };
-            resetHeartbeat();
+// ── Toast ──────────────────────────────────────────────
+function showToast(msg, type='info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
 
-            updateBackend(activeService, latitude, longitude, speedKmph);
-            setStatus(`Live 🟢 <br><small>Sharing for ${activeService}</small>`, true);
-        }
+async function logout() {
+  await fetch('/api/driver/logout', { method: 'POST' });
+  window.location.href = '/driver/login';
+}
 
-        function onLocationError(err) {
-            console.error(err);
-            log(`⚠️ GPS Error (code ${err.code}): ${err.message}`);
-
-            if (err.code === 1) {
-                alert("Please allow Location Access to share live tracking.");
-                stopTracking();
-            } else if (err.code === 3) {
-                log("⏱️ GPS timeout — watchPosition retrying...");
-                if (lastCoords) {
-                    log("📍 Sending last known position as keepalive...");
-                    updateBackend(activeService, lastCoords.lat, lastCoords.lng, 0);
-                }
-            }
-        }
-
-        // ─────────────────────────────────────────────
-        // HEARTBEAT
-        // ─────────────────────────────────────────────
-        function resetHeartbeat() {
-            clearTimeout(heartbeatTimer);
-            heartbeatTimer = setTimeout(() => {
-                if (!isTracking) return;
-                log("💓 Heartbeat: no GPS fix for 35 s — reinitialising...");
-                restartWatch();
-            }, 35000);
-        }
-
-        function restartWatch() {
-            if (watchId !== null) {
-                navigator.geolocation.clearWatch(watchId);
-                watchId = null;
-            }
-            navigator.geolocation.getCurrentPosition(onLocationSuccess, onLocationError, GPS_OPTIONS);
-            watchId = navigator.geolocation.watchPosition(onLocationSuccess, onLocationError, GPS_OPTIONS);
-            log("🔄 watchPosition restarted.");
-        }
-
-        // ─────────────────────────────────────────────
-        // VISIBILITY CHANGE
-        // ─────────────────────────────────────────────
-        document.addEventListener("visibilitychange", async () => {
-            if (!isTracking) return;
-            if (document.visibilityState === "hidden") {
-                log("📱 App moved to background...");
-            } else {
-                log("👁️ App returned to foreground — refreshing...");
-                await acquireWakeLock();
-                restartWatch();
-            }
-        });
-
-        // ─────────────────────────────────────────────
-        // START TRACKING
-        // ─────────────────────────────────────────────
-        startBtn.addEventListener("click", async () => {
-            const serviceNo = serviceSelect.value;
-            if (!serviceNo) { alert("Please select a service number first."); return; }
-            if (!navigator.geolocation) { alert("Geolocation is not supported by your browser."); return; }
-
-            activeService = serviceNo;
-            isTracking    = true;
-            lastCoords    = null;
-
-            startBtn.style.display  = "none";
-            stopBtn.style.display   = "block";
-            serviceSelect.disabled  = true;
-
-            setStatus("Connecting GPS... 🛰️", true);
-            log("Requesting GPS access...");
-
-            await acquireWakeLock();
-
-            navigator.geolocation.getCurrentPosition(onLocationSuccess, onLocationError, GPS_OPTIONS);
-            watchId = navigator.geolocation.watchPosition(onLocationSuccess, onLocationError, GPS_OPTIONS);
-            resetHeartbeat();
-        });
-
-        // ─────────────────────────────────────────────
-        // STOP TRACKING
-        // ─────────────────────────────────────────────
-        stopBtn.addEventListener("click", () => stopTracking());
-
-        function stopTracking() {
-            isTracking    = false;
-            activeService = null;
-            lastCoords    = null;
-
-            if (watchId !== null) {
-                navigator.geolocation.clearWatch(watchId);
-                watchId = null;
-            }
-            clearTimeout(heartbeatTimer);
-            releaseWakeLock();
-
-            stopBtn.style.display   = "none";
-            startBtn.style.display  = "block";
-            // Only re-enable dropdown if driver is not assigned
-            if (!driverAssignment) {
-                serviceSelect.disabled  = false;
-            }
-
-            setStatus("Inactive ⚪", false);
-            log("Stopped tracking.");
-        }
-
-        // ─────────────────────────────────────────────
-        // UI HELPER
-        // ─────────────────────────────────────────────
-        function setStatus(html, active) {
-            statusContainer.querySelector(".status-text").innerHTML = html;
-            if (active) {
-                statusContainer.classList.add("status-active", "pulse");
-                statusContainer.classList.remove("status-error");
-            } else {
-                statusContainer.classList.remove("status-active", "pulse", "status-error");
-            }
-        }
-
-        // ─────────────────────────────────────────────
-        // BACKEND UPDATE
-        // ─────────────────────────────────────────────
-        const MAX_RETRIES = 5;
-        let flushPending  = false;
-
-        async function updateBackend(serviceNo, lat, lng, speed, attempt = 0) {
-            const payload = { service_no: serviceNo, lat, lng, speed };
-
-            try {
-                const response = await fetch('/api/update_location', {
-                    method:    'POST',
-                    headers:   { 'Content-Type': 'application/json' },
-                    body:      JSON.stringify(payload),
-                    keepalive: true
-                });
-
-                if (response.ok) {
-                    log(`✅ Sent: ${lat.toFixed(5)}, ${lng.toFixed(5)} (${speed} km/h)`);
-                    setStatus(`Live 🟢 <br><small>Sharing for ${serviceNo}</small>`, true);
-                    flushOfflineQueue();
-                    return;
-                }
-
-                const errData = await response.json().catch(() => ({}));
-
-                // Handle 403 — driver not assigned to this service
-                if (response.status === 403) {
-                    log(`❌ ${errData.error}`);
-                    setStatus(`Error 🔴 <br><small>${errData.error}</small>`, false);
-                    statusContainer.classList.add("status-error");
-                    stopTracking();
-                    alert(errData.error);
-                    return;
-                }
-
-                log(`❌ Server error: ${errData.error || 'HTTP ' + response.status}`);
-
-                if (response.status >= 500 && attempt < MAX_RETRIES) {
-                    scheduleRetry(serviceNo, lat, lng, speed, attempt);
-                } else {
-                    queueOffline(payload);
-                }
-
-            } catch (netErr) {
-                log(`📵 Network error (attempt ${attempt + 1}): ${netErr.message}`);
-                setStatus(`No Signal 🔴 <br><small>Retrying...</small>`, false);
-                statusContainer.classList.add("status-error");
-
-                if (attempt < MAX_RETRIES) {
-                    scheduleRetry(serviceNo, lat, lng, speed, attempt);
-                } else {
-                    log("📦 Max retries reached — queuing update.");
-                    queueOffline(payload);
-                }
-            }
-        }
-
-        function scheduleRetry(serviceNo, lat, lng, speed, attempt) {
-            const delay = Math.min(Math.pow(2, attempt) * 1000, 30000);
-            log(`⏳ Retrying in ${delay / 1000}s... (${attempt + 1}/${MAX_RETRIES})`);
-            setTimeout(() => updateBackend(serviceNo, lat, lng, speed, attempt + 1), delay);
-        }
-
-        // ─── Offline Queue ──
-        function queueOffline(payload) {
-            if (offlineQueue.length < 20) {
-                offlineQueue.push(payload);
-                log(`📦 Queued (${offlineQueue.length} pending)`);
-            }
-        }
-
-        async function flushOfflineQueue() {
-            if (flushPending || offlineQueue.length === 0) return;
-            flushPending = true;
-            log(`📤 Flushing ${offlineQueue.length} queued update(s)...`);
-
-            while (offlineQueue.length > 0) {
-                const item = offlineQueue[0];
-                try {
-                    const r = await fetch('/api/update_location', {
-                        method:    'POST',
-                        headers:   { 'Content-Type': 'application/json' },
-                        body:      JSON.stringify(item),
-                        keepalive: true
-                    });
-                    if (r.ok) { offlineQueue.shift(); log("✅ Flushed queued update."); }
-                    else break;
-                } catch { break; }
-            }
-            flushPending = false;
-        }
-
-        window.addEventListener("online", () => {
-            log("🌐 Network connection restored — flushing offline queue...");
-            flushOfflineQueue();
-        });
-
-        // ─────────────────────────────────────────────
-        // LOGOUT
-        // ─────────────────────────────────────────────
-        async function logout() {
-            stopTracking();
-            try {
-                await fetch("/api/driver/logout", { method: "POST" });
-                window.location.href = "/driver/login";
-            } catch (e) { window.location.href = "/driver/login"; }
-        }
-
-        // Auto-logout when page closes
-        window.addEventListener('pagehide', () => {
-            if (isTracking) {
-                stopTracking();
-            }
-            navigator.sendBeacon("/api/driver/logout");
-        });
-    </script>
+loadDriverInfo();
+</script>
 </body>
-
 </html>
