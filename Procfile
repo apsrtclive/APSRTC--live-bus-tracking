@@ -1,1 +1,1 @@
-web: gunicorn --chdir Backend backend:app --workers 4 --threads 2 --worker-class gthread --timeout 120 --preload --log-level info
+web: gunicorn --chdir Backend backend:app --workers 2 --threads 2 --worker-class gthread --timeout 120 --log-level info

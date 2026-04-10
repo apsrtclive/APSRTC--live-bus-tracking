@@ -70,6 +70,127 @@ else:
 db.init_app(app)
 CORS(app)
 
+# ═══════════════════════════════════════════════════════
+# DEMO DATA SEEDER (routes + stops + drivers)
+# ═══════════════════════════════════════════════════════
+
+def _seed_demo_drivers():
+    """Seed routes 28A, 6K, 400K with stops, vehicles and driver accounts."""
+    if Driver.query.count() > 0:
+        return  # Already seeded
+
+    DEMO = [
+        {
+            'route_name': 'RTC Complex - Gajuwaka',
+            'from': 'RTC Complex, Visakhapatnam',
+            'to': 'Gajuwaka',
+            'service_no': '28A',
+            'service_type': 'Express',
+            'ticket_price': 18,
+            'vehicle_no': 'AP31 V 1234',
+            'driver_user': 'driver_28a',
+            'driver_pass': 'pass28a',
+            'stops': [
+                ('RTC Complex',         17.7231, 83.3012, 1),
+                ('Jagadamba Junction',  17.7185, 83.2998, 2),
+                ('Dwaraka Nagar',       17.7101, 83.2981, 3),
+                ('Seethammadhara',      17.7035, 83.2934, 4),
+                ('NAD Junction',        17.6954, 83.2889, 5),
+                ('Ukkunagaram',         17.6870, 83.2854, 6),
+                ('Gajuwaka',            17.6787, 83.2819, 7),
+            ],
+        },
+        {
+            'route_name': 'RTC Complex - Steel Plant',
+            'from': 'RTC Complex, Visakhapatnam',
+            'to': 'Steel Plant',
+            'service_no': '6K',
+            'service_type': 'Metro Express',
+            'ticket_price': 22,
+            'vehicle_no': 'AP31 V 5678',
+            'driver_user': 'driver_6k',
+            'driver_pass': 'pass6k',
+            'stops': [
+                ('RTC Complex',         17.7231, 83.3012, 1),
+                ('Jagadamba Junction',  17.7185, 83.2998, 2),
+                ('Kancharapalem',       17.7090, 83.2953, 3),
+                ('Gopalapatnam',        17.6988, 83.2902, 4),
+                ('Kurmannapalem',       17.6901, 83.2871, 5),
+                ('Ukkunagaram',         17.6870, 83.2854, 6),
+                ('Steel Plant Gate',    17.6812, 83.2801, 7),
+            ],
+        },
+        {
+            'route_name': 'RTC Complex - Pendurthi',
+            'from': 'RTC Complex, Visakhapatnam',
+            'to': 'Pendurthi',
+            'service_no': '400K',
+            'service_type': 'Ordinary',
+            'ticket_price': 30,
+            'vehicle_no': 'AP31 V 9012',
+            'driver_user': 'driver_400k',
+            'driver_pass': 'pass400k',
+            'stops': [
+                ('RTC Complex',         17.7231, 83.3012, 1),
+                ('Siripuram',           17.7278, 83.3098, 2),
+                ('Old Town',            17.7350, 83.3201, 3),
+                ('Kommadi',             17.7489, 83.3312, 4),
+                ('Madhurawada',         17.7602, 83.3489, 5),
+                ('Kapuluppada',         17.7712, 83.3601, 6),
+                ('Pendurthi',           17.7901, 83.3789, 7),
+            ],
+        },
+    ]
+
+    for d in DEMO:
+        try:
+            # Route
+            route = Route.query.filter_by(route_name=d['route_name']).first()
+            if not route:
+                route = Route(route_name=d['route_name'],
+                              from_station=d['from'], to_station=d['to'])
+                db.session.add(route)
+                db.session.flush()
+
+            # Service
+            service = Service.query.filter_by(service_no=d['service_no']).first()
+            if not service:
+                service = Service(service_no=d['service_no'],
+                                  route_id=route.route_id,
+                                  service_type=d['service_type'],
+                                  ticket_price=d['ticket_price'])
+                db.session.add(service)
+                db.session.flush()
+
+            # Stops
+            if Stop.query.filter_by(route_id=route.route_id).count() == 0:
+                for name, lat, lng, order in d['stops']:
+                    db.session.add(Stop(route_id=route.route_id,
+                                        stop_name=name, lat=lat, lng=lng,
+                                        stop_order=order))
+
+            # Vehicle
+            if not Vehicle.query.filter_by(vehicle_no=d['vehicle_no']).first():
+                vehicle = Vehicle(vehicle_no=d['vehicle_no'],
+                                  service_id=service.service_id,
+                                  status='Running')
+                db.session.add(vehicle)
+                db.session.flush()
+
+            # Driver
+            if not Driver.query.filter_by(username=d['driver_user']).first():
+                driver = Driver(username=d['driver_user'],
+                                password=generate_password_hash(d['driver_pass']),
+                                assigned_service_id=service.service_id)
+                db.session.add(driver)
+
+            db.session.commit()
+            print(f"[OK] Seeded driver {d['driver_user']} → service {d['service_no']}", flush=True)
+        except Exception as e:
+            db.session.rollback()
+            print(f"[WARN] Could not seed {d['driver_user']}: {e}", flush=True)
+
+
 # ── Startup: create tables + seed data ──
 with app.app_context():
     try:
@@ -91,6 +212,9 @@ with app.app_context():
         # Seed bus schedule
         from seed_data import seed_bus_schedule
         seed_bus_schedule(db, BusSchedule)
+
+        # Seed demo routes, stops, services, vehicles and drivers
+        _seed_demo_drivers()
 
     except Exception as e:
         import traceback
@@ -354,7 +478,65 @@ def route_details(service_no):
     return jsonify([{"name": st.stop_name, "lat": st.lat, "lng": st.lng, "stop_order": st.stop_order} for st in stops])
 
 
-@app.route("/api/routes")
+
+@app.route("/api/eta/<service_no>")
+def bus_eta(service_no):
+    """Calculate ETA to final stop based on live GPS location."""
+    # Get live location
+    loc = db.session.query(LiveLocation).join(Vehicle).join(Service)\
+        .filter(Service.service_no == service_no).first()
+    if not loc:
+        return jsonify({"error": "No live location available"}), 404
+
+    # Get route stops
+    stops = db.session.query(Stop).join(Route)\
+        .join(Service, Service.route_id == Route.route_id)\
+        .filter(Service.service_no == service_no)\
+        .order_by(Stop.stop_order.asc()).all()
+    if not stops:
+        return jsonify({"error": "No route stops found"}), 404
+
+    bus_lat, bus_lng = float(loc.lat), float(loc.lng)
+
+    # Find closest stop ahead of the bus
+    closest_stop = min(stops, key=lambda s: haversine(bus_lat, bus_lng, s.lat, s.lng))
+    closest_idx  = stops.index(closest_stop)
+
+    # Remaining stops from bus position onward
+    remaining_stops = stops[closest_idx:]
+    stops_remaining = len(remaining_stops) - 1  # exclude current
+
+    # Calculate distance along remaining stops
+    total_km = 0.0
+    for i in range(len(remaining_stops) - 1):
+        total_km += haversine(remaining_stops[i].lat, remaining_stops[i].lng,
+                              remaining_stops[i+1].lat, remaining_stops[i+1].lng)
+
+    # Estimate speed (use live speed or default 25 km/h)
+    avg_speed = max(float(loc.speed or 0), 15.0)  # at least 15 km/h
+    eta_minutes = int((total_km / avg_speed) * 60) if avg_speed > 0 else 0
+
+    # Bus status based on distance to closest stop
+    dist_to_closest = haversine(bus_lat, bus_lng, closest_stop.lat, closest_stop.lng)
+    if dist_to_closest < 0.1:
+        bus_status = "At Station"
+    elif dist_to_closest < 0.5:
+        bus_status = "Approaching"
+    else:
+        bus_status = "En Route"
+
+    return jsonify({
+        "service_no":           service_no,
+        "destination":          stops[-1].stop_name,
+        "closest_stop":         closest_stop.stop_name,
+        "stops_remaining":      stops_remaining,
+        "remaining_distance_km": round(total_km, 2),
+        "eta_minutes":          eta_minutes,
+        "bus_status":           bus_status,
+    })
+
+
+
 @cache.cached(timeout=600)
 def get_all_routes():
     routes = Route.query.all()
