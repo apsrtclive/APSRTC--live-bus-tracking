@@ -42,7 +42,7 @@
   <div style="display:flex;align-items:center;gap:0.5rem;margin-left:0.5rem;">
     <span style="font-size:0.875rem;color:rgba(255,255,255,0.8);">{{ username }}</span>
     {% if session.get('is_admin') %}
-    <a href="/admin" style="font-size:0.8rem;color:rgba(255,255,255,0.8);border:1px solid rgba(255,255,255,0.3);padding:0.25rem 0.6rem;border-radius:4px;">Admin</a>
+    <a href="/admin" style="font-size:0.8rem;color:rgba(255,255,255,0.8);border:1px solid rgba(255,255,255,0.3);padding:0.25rem 0.6rem;border-radius:4px;" data-i18n="admin_panel">Admin</a>
     {% endif %}
     <button class="btn btn-ghost btn-sm" style="color:#fff;border-color:rgba(255,255,255,0.3);" onclick="logout()" data-i18n="logout">Logout</button>
   </div>
@@ -51,7 +51,7 @@
 <div class="page-wrapper">
 <!-- ── Sidebar ── -->
 <nav class="sidebar">
-  <div class="sidebar-section-label" data-i18n="overview">Navigation</div>
+  <div class="sidebar-section-label" data-i18n="navigation">NAVIGATION</div>
   <div class="sidebar-nav">
     <div class="sidebar-item active" onclick="showSection('search')" id="nav-search">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -97,16 +97,16 @@
         <div class="form-group">
           <label class="form-label" data-i18n="to">To</label>
           <select id="toSelect" class="form-control" onchange="searchBuses()">
-            <option value="">All Destinations</option>
+            <option value="" data-i18n-option="all_destinations">All Destinations</option>
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Bus Type</label>
+          <label class="form-label" data-i18n="bus_type">Bus Type</label>
           <select id="typeSelect" class="form-control" onchange="searchBuses()">
-            <option value="">All Types</option>
-            <option value="Metro Express">Metro Express</option>
-            <option value="Express">Express</option>
-            <option value="Ordinary">Ordinary</option>
+            <option value="" data-i18n-option="all_types">All Types</option>
+            <option value="Metro Express" data-i18n-option="metro_express">Metro Express</option>
+            <option value="Express" data-i18n-option="express">Express</option>
+            <option value="Ordinary" data-i18n-option="ordinary">Ordinary</option>
           </select>
         </div>
         <div class="form-group">
@@ -121,14 +121,14 @@
     <div id="resultsSection" style="display:none;">
       <div class="section-header">
         <div>
-          <div class="section-title">Search Results</div>
+          <div class="section-title" data-i18n="results_title">Search Results</div>
           <div id="resultCount" class="text-muted text-small"></div>
         </div>
         <div class="filter-chips">
-          <button class="chip active" onclick="filterType('')">All</button>
-          <button class="chip" onclick="filterType('Metro Express')">Metro Express</button>
-          <button class="chip" onclick="filterType('Express')">Express</button>
-          <button class="chip" onclick="filterType('Ordinary')">Ordinary</button>
+          <button class="chip active" onclick="filterType('')" data-i18n="all_types">All Types</button>
+          <button class="chip" onclick="filterType('Metro Express')" data-i18n="metro_express">Metro Express</button>
+          <button class="chip" onclick="filterType('Express')" data-i18n="express">Express</button>
+          <button class="chip" onclick="filterType('Ordinary')" data-i18n="ordinary">Ordinary</button>
         </div>
       </div>
       <div id="resultsGrid" class="results-grid"></div>
@@ -136,36 +136,36 @@
     <div id="loadingState" class="loading-state" style="display:none;"><div class="spinner"></div><div>Searching...</div></div>
     <div id="emptyState" class="empty-state" style="display:none;">
       <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8Z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-      <h3>No buses found</h3><p class="text-muted">Try a different destination or bus type</p>
+      <h3 data-i18n="no_results">No buses found</h3><p class="text-muted" data-i18n="no_results_sub">Try a different destination or bus type</p>
     </div>
     <div id="promptState" class="empty-state">
       <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#003580" stroke-width="1.5" opacity="0.3"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <h3 style="color:var(--text-muted);">Select a destination to view buses</h3>
+      <h3 style="color:var(--text-muted);" data-i18n="select_dest_prompt">Select a destination to view buses</h3>
     </div>
   </div>
 
   <!-- ══ LIVE TRACKING SECTION ══ -->
   <div id="section-live" class="admin-panel-section">
     <div style="margin-bottom:1rem;">
-      <h2 style="margin-bottom:0.25rem;">📡 Live Bus Tracking</h2>
-      <p class="text-muted text-small">Real-time bus location on map — auto-refreshes every 5 seconds</p>
+      <h2 style="margin-bottom:0.25rem;" data-i18n="live_title">📡 Live Bus Tracking</h2>
+      <p class="text-muted text-small" data-i18n="live_subtitle">Real-time bus location on map — auto-refreshes every 5 seconds</p>
     </div>
 
     <!-- Service Selector -->
     <div class="card card-body" style="margin-bottom:1rem;">
       <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end;">
         <div class="form-group" style="flex:1;min-width:200px;">
-          <label class="form-label">Select Bus Service</label>
+          <label class="form-label" data-i18n="select_service">Select Bus Service</label>
           <select id="liveServiceSelect" class="form-control" onchange="document.getElementById('liveServiceNo').value=this.value">
-            <option value="">— choose a service —</option>
+            <option value="" data-i18n-option="all_types">— choose a service —</option>
             <option value="28A">28A — RTC Complex → Gajuwaka</option>
             <option value="6K">6K — RTC Complex → Steel Plant</option>
             <option value="400K">400K — RTC Complex → Pendurthi</option>
           </select>
         </div>
         <div class="form-group" style="flex:1;min-width:160px;">
-          <label class="form-label">Or type service no.</label>
-          <input type="text" id="liveServiceNo" class="form-control" data-i18n-placeholder="type_service" placeholder="e.g. 28A">
+          <label class="form-label" data-i18n="type_service">Or type service no.</label>
+          <input type="text" id="liveServiceNo" class="form-control" data-i18n-placeholder="search_placeholder" placeholder="Search destination or route...">
         </div>
         <div class="form-group">
           <label class="form-label">&nbsp;</label>
@@ -173,12 +173,12 @@
         </div>
         <div class="form-group">
           <label class="form-label">&nbsp;</label>
-          <button class="btn btn-ghost" id="stopTrackBtn" onclick="stopTracking()" style="display:none;" data-i18n="stop_btn">⏹ Stop</button>
+          <button class="btn btn-ghost" id="stopTrackBtn" onclick="stopTracking()" style="display:none;" data-i18n="stop_btn">Stop</button>
         </div>
       </div>
       <div id="liveStatusBar" style="margin-top:0.75rem;display:none;">
         <span class="pulse-dot"></span>
-        <span style="font-size:0.875rem;color:var(--success);font-weight:600;" id="liveStatusText">Tracking active</span>
+        <span style="font-size:0.875rem;color:var(--success);font-weight:600;" id="liveStatusText" data-i18n="tracking_active">Tracking active</span>
         <span style="font-size:0.8125rem;color:var(--text-muted);margin-left:0.5rem;" id="liveLastUpdate"></span>
       </div>
     </div>
@@ -198,7 +198,7 @@
 
         <!-- ETA -->
         <div class="card card-body" id="etaCard" style="display:none;">
-          <h4 style="margin-bottom:0.75rem;">⏱️ ETA</h4>
+          <h4 style="margin-bottom:0.75rem;" data-i18n="eta">ETA</h4>
           <div id="etaContent"></div>
         </div>
 
@@ -212,8 +212,8 @@
         <div class="card card-body" id="waitingCard">
           <div style="text-align:center;padding:1rem;color:var(--text-muted);">
             <div style="font-size:2.5rem;margin-bottom:0.5rem;">🚌</div>
-            <div style="font-weight:600;color:var(--text);">Select a bus to track</div>
-            <div style="font-size:0.85rem;margin-top:0.25rem;">Live location updates every 5 seconds</div>
+            <div style="font-weight:600;color:var(--text);" data-i18n="select_to_track">Select a bus to track</div>
+            <div style="font-size:0.85rem;margin-top:0.25rem;" data-i18n="live_update_info">Live location updates every 5 seconds</div>
           </div>
         </div>
 
@@ -223,20 +223,31 @@
 
   <!-- ══ FULL SCHEDULE SECTION ══ -->
   <div id="section-schedule" class="admin-panel-section">
-    <div class="section-header"><h2>Full Schedule</h2></div>
+    <div class="section-header"><h2 data-i18n="full_schedule_heading">Full Schedule</h2></div>
     <div class="card">
       <div style="padding:1rem;display:flex;gap:1rem;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--border);">
-        <input type="text" id="scheduleSearch" class="form-control" style="max-width:280px;" placeholder="Search destination or route code..." oninput="filterSchedule()">
+        <input type="text" id="scheduleSearch" class="form-control" style="max-width:280px;" data-i18n-placeholder="search_placeholder" placeholder="Search destination or route..." oninput="filterSchedule()">
         <select id="scheduleTypeFilter" class="form-control" style="max-width:180px;" onchange="filterSchedule()">
-          <option value="">All Types</option>
-          <option value="Metro Express">Metro Express</option>
-          <option value="Express">Express</option>
-          <option value="Ordinary">Ordinary</option>
+          <option value="" data-i18n-option="all_types">All Types</option>
+          <option value="Metro Express" data-i18n-option="metro_express">Metro Express</option>
+          <option value="Express" data-i18n-option="express">Express</option>
+          <option value="Ordinary" data-i18n-option="ordinary">Ordinary</option>
         </select>
       </div>
       <div style="overflow-x:auto;">
         <table class="data-table">
-          <thead><tr><th>Route</th><th>Destination</th><th>Type</th><th>Departs</th><th>Arrives</th><th>Duration</th><th>Fare</th><th>Next Bus</th></tr></thead>
+          <thead>
+            <tr>
+              <th data-i18n="col_route">ROUTE</th>
+              <th data-i18n="col_destination">DESTINATION</th>
+              <th data-i18n="col_type">TYPE</th>
+              <th data-i18n="col_departs">DEPARTS</th>
+              <th data-i18n="col_arrives">ARRIVES</th>
+              <th data-i18n="col_duration">DURATION</th>
+              <th data-i18n="col_fare">FARE</th>
+              <th data-i18n="col_next_bus">NEXT BUS</th>
+            </tr>
+          </thead>
           <tbody id="scheduleTableBody"></tbody>
         </table>
       </div>
@@ -248,9 +259,14 @@
 
 <!-- Mobile Bottom Nav -->
 <nav class="bottom-nav">
-  <div class="bottom-nav-item active" onclick="showSection('search')" id="bnav-search"><span class="nav-icon">🔍</span><span>Search</span></div>
-  <div class="bottom-nav-item" onclick="showSection('live')" id="bnav-live"><span class="nav-icon">📡</span><span>Live</span></div>
-  <div class="bottom-nav-item" onclick="showSection('schedule')" id="bnav-s<script src="/static/js/translations.js"></script>
+  <div class="bottom-nav-item active" onclick="showSection('search')" id="bnav-search"><span class="nav-icon">🔍</span><span data-i18n="search_buses">Search</span></div>
+  <div class="bottom-nav-item" onclick="showSection('live')" id="bnav-live"><span class="nav-icon">📡</span><span data-i18n="live_tracking">Live</span></div>
+  <div class="bottom-nav-item" onclick="showSection('schedule')" id="bnav-schedule"><span class="nav-icon">📅</span><span data-i18n="full_schedule">Schedule</span></div>
+</nav>
+
+<div id="toast-container" style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;pointer-events:none;"></div>
+
+<script src="/static/js/translations.js"></script>
 <script>
 // ── Clock ──────────────────────────────────────────────
 function updateClock() {
@@ -284,7 +300,7 @@ async function loadStats() {
     const lang = localStorage.getItem('lang') || 'en';
     const schedulesLabel = translations[lang].full_schedule || "Schedules";
     const runningLabel = translations[lang].running || "Running";
-    const destinationsLabel = translations[lang].all_destinations || "Destinations";
+    const destinationsLabel = translations[translations[lang].all_destinations ? lang : 'en'].all_destinations || "Destinations";
     const routesLabel = translations[lang].routes || "Routes";
     
     document.getElementById('statsGrid').innerHTML = `
@@ -303,7 +319,7 @@ async function loadDestinations() {
   const lang = localStorage.getItem('lang') || 'en';
   const allDestLabel = translations[lang].all_destinations || "All Destinations";
   
-  sel.innerHTML = `<option value="" data-i18n="all_destinations">${allDestLabel}</option>`;
+  sel.innerHTML = `<option value="" data-i18n-option="all_destinations">${allDestLabel}</option>`;
   dests.forEach(d => { const o=document.createElement('option'); o.value=d; o.textContent=d; sel.appendChild(o); });
 }
 
@@ -332,26 +348,37 @@ function minutesUntil(dep) {
 }
 function countdownText(m) {
   const lang = localStorage.getItem('lang') || 'en';
-  if(m<=0) return lang === 'te' ? 'ఇప్పుడే బయలుదేరుతోంది!' : (lang === 'hi' ? 'अभी प्रस्थान हो रही है!' : 'Departing now!');
-  if(m<2) return lang === 'te' ? 'త్వరలో బయలుదేరుతోంది!' : (lang === 'hi' ? 'जल्द ही प्रस्थान होगी!' : 'Departing soon!');
+  if(m<=0) return translations[lang].departing_now || 'Departing now!';
+  if(m<2) return translations[lang].departing_soon || 'Departing soon!';
   
   const h=Math.floor(m/60),r=m%60;
-  if (lang === 'te') {
-    return `తదుపరి ${m} నిముషాల్లో`;
-  } else if (lang === 'hi') {
-    return `अगली ${m} मिनट में`;
-  }
-  return `Next in ${m} min`;
+  let text = translations[lang].next_in || "Next in";
+  let minLabel = translations[lang].min || "min";
+  return `${text} ${m} ${minLabel}`;
 }
 function typeBadge(t) {
+  const lang = localStorage.getItem('lang') || 'en';
+  let label = t;
+  if (t === 'Metro Express') label = translations[lang].metro_express || t;
+  if (t === 'Express') label = translations[lang].express || t;
+  if (t === 'Ordinary') label = translations[lang].ordinary || t;
+  
   const cls = t==='Metro Express'?'badge-orange':t==='Express'?'badge-blue':'badge-gray';
-  return `<span class="badge ${cls}">${t}</span>`;
+  return `<span class="badge ${cls}">${label}</span>`;
 }
 
 let activeFilter='';
 function filterType(t) {
   activeFilter=t;
-  document.querySelectorAll('.filter-chips .chip').forEach(c=>c.classList.toggle('active',c.onclick.toString().includes(`'${t}'`)));
+  document.querySelectorAll('.filter-chips .chip').forEach(c => {
+      // Find the chip by its onclick text hackily or use data attributes
+       if (t === '') {
+           if (c.getAttribute('data-i18n') === 'all_types') c.classList.add('active'); else c.classList.remove('active');
+       } else {
+           const map = {'Metro Express': 'metro_express', 'Express': 'express', 'Ordinary': 'ordinary'};
+           if (c.getAttribute('data-i18n') === map[t]) c.classList.add('active'); else c.classList.remove('active');
+       }
+  });
   renderResults(t?allResults.filter(b=>b.bus_type===t):allResults);
 }
 
@@ -361,15 +388,14 @@ function renderResults(buses) {
   document.getElementById('resultsSection').style.display='block';
   document.getElementById('emptyState').style.display='none';
   
-  const busLabel = buses.length !== 1 ? (lang === 'te' ? 'బస్సులు' : 'buses') : (lang === 'te' ? 'బస్సు' : 'bus');
-  const foundLabel = lang === 'te' ? 'కనుగొనబడింది' : 'found';
+  const busLabel = buses.length !== 1 ? (translations[lang].buses || 'buses') : (translations[lang].bus || 'bus');
+  const foundLabel = translations[lang].found || 'found';
   document.getElementById('resultCount').textContent=`${buses.length} ${busLabel} ${foundLabel}`;
   
   document.getElementById('resultsGrid').innerHTML = buses.map(b=>{
     const mins=minutesUntil(b.departure_time), isSoon=mins<=10;
     const departsLabel = translations[lang].departs || "Departs";
     const arrivesLabel = translations[lang].arrives || "Arrives";
-    const fareLabel = translations[lang].fare || "Fare";
     const runningLabel = translations[lang].running || "Running";
     
     return `<div class="bus-card ${mins===0||mins>1430?'running':''}">
@@ -498,7 +524,7 @@ async function fetchLiveLocation(svc) {
     document.getElementById('liveLastUpdate').textContent = `${lastUpdateLabel}: ${now}`;
 
     if (d.error) {
-      const infoMsg = lang === 'te' ? 'డ్రైవర్ ఇంకా సమాచారాన్ని పంపడం ప్రారంభించలేదు.' : "Driver hasn't started broadcasting yet. Ask driver to open Driver Portal and start sharing location.";
+      const infoMsg = translations[lang].driver_note || "Driver hasn't started broadcasting yet.";
       document.getElementById('busInfoCard').style.display = 'block';
       document.getElementById('busInfoContent').innerHTML =
         `<div class="alert alert-info" style="font-size:0.8125rem;">
@@ -547,16 +573,16 @@ async function fetchETA(svc) {
     document.getElementById('etaCard').style.display = 'block';
     
     let statusText = d.bus_status;
-    if (lang === 'te') {
-      statusText = d.bus_status === 'At Station' ? 'స్టేషన్‌లో ఉంది' : (d.bus_status === 'Approaching' ? 'వస్తోంది' : 'మార్గంలో ఉంది');
-    }
+    if (d.bus_status === 'At Station') statusText = translations[lang].at_station || d.bus_status;
+    if (d.bus_status === 'Approaching') statusText = translations[lang].approaching || d.bus_status;
+    if (d.bus_status === 'En Route') statusText = translations[lang].en_route || d.bus_status;
     
     const statusCls = d.bus_status==='At Station'?'badge-green':d.bus_status==='Approaching'?'badge-yellow':'badge-blue';
     document.getElementById('etaContent').innerHTML = `
       <div style="display:flex;flex-direction:column;gap:0.5rem;font-size:0.875rem;">
         <div>🏁 <strong>${translations[lang].to || 'To'}:</strong> ${d.destination}</div>
         <div>📍 <strong>${translations[lang].nearest || 'Nearest'}:</strong> ${d.closest_stop}</div>
-        <div>⏱️ <strong>${translations[lang].eta || 'ETA'}:</strong> <span style="color:var(--orange);font-weight:800;font-size:1.2rem;">${d.eta_minutes} min</span></div>
+        <div>⏱️ <strong>${translations[lang].eta || 'ETA'}:</strong> <span style="color:var(--orange);font-weight:800;font-size:1.2rem;">${d.eta_minutes} ${translations[lang].min || 'min'}</span></div>
         <div>🛣️ <strong>${translations[lang].distance || 'Distance'}:</strong> ${d.remaining_distance_km} km</div>
         <div>🚏 <strong>${translations[lang].stops_left || 'Stops left'}:</strong> ${d.stops_remaining}</div>
         <div><span class="badge ${statusCls}">${statusText}</span></div>
@@ -592,7 +618,10 @@ function filterSchedule() {
 }
 function renderScheduleTable(buses) {
   const lang = localStorage.getItem('lang') || 'en';
-  document.getElementById('scheduleTableBody').innerHTML = buses.map(b=>{
+  const tableBody = document.getElementById('scheduleTableBody');
+  if (!tableBody) return;
+
+  tableBody.innerHTML = buses.map(b=>{
     const mins = minutesUntil(b.departure_time);
     return `<tr>
       <td><strong>${b.route_code}</strong></td>
@@ -615,43 +644,16 @@ async function logout() {
 function showToast(msg, type='info') {
   const t = document.createElement('div');
   t.className = `toast toast-${type}`; t.textContent = msg;
-  document.getElementById('toast-container').appendChild(t);
+  const container = document.getElementById('toast-container');
+  if (container) container.appendChild(t);
   setTimeout(() => t.remove(), 3200);
 }
 
 // ── Init ───────────────────────────────────────────────
-loadDestinations();
-loadStats();
-</script>TableBody').innerHTML = buses.map(b=>{
-    const mins = minutesUntil(b.departure_time);
-    return `<tr>
-      <td><strong>${b.route_code}</strong></td>
-      <td>${b.destination}</td>
-      <td>${typeBadge(b.bus_type)}</td>
-      <td><strong>${b.departure_time}</strong></td>
-      <td>${b.arrival_time}</td>
-      <td>${b.duration}</td>
-      <td>₹${b.fare}</td>
-      <td>${mins<=5?'<span class="badge badge-green">Running</span>':`<span style="font-size:0.8rem;color:var(--text-muted);">${countdownText(mins)}</span>`}</td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="8" style="padding:2rem;text-align:center;color:var(--text-muted);">No schedules found</td></tr>';
-}
-
-// ── Logout + Toast ─────────────────────────────────────
-async function logout() {
-  await fetch('/api/user/logout',{method:'POST'});
-  window.location.href = '/login';
-}
-function showToast(msg, type='info') {
-  const t = document.createElement('div');
-  t.className = `toast toast-${type}`; t.textContent = msg;
-  document.getElementById('toast-container').appendChild(t);
-  setTimeout(() => t.remove(), 3200);
-}
-
-// ── Init ───────────────────────────────────────────────
-loadDestinations();
-loadStats();
+document.addEventListener('DOMContentLoaded', () => {
+    loadDestinations();
+    loadStats();
+});
 </script>
 
 <style>

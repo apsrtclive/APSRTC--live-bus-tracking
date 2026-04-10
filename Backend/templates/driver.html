@@ -24,7 +24,7 @@
 <header class="app-header">
   <div class="header-logo">
     <div class="header-logo-icon" style="background:var(--orange);">🚗</div>
-    <div><div>Driver Dashboard</div><div class="header-subtitle">APSRTC Live Tracker</div></div>
+    <div><div data-i18n="driver_dashboard">Driver Dashboard</div><div class="header-subtitle" data-i18n="app_subtitle">APSRTC Live Tracker</div></div>
   </div>
   <div class="header-spacer"></div>
   <div class="header-clock" id="headerClock"></div>
@@ -39,7 +39,7 @@
   </div>
 </header>
 
-<div class="driver-main">
+<div class="driver-main" id="driverMain">
 
   <!-- Assigned Route Card -->
   <div class="driver-card" style="margin-bottom:1.25rem;">
@@ -50,7 +50,7 @@
       </div>
       <div id="liveStatusBadge" class="status-indicator"><span class="dot-off"></span> <span data-i18n="offline">Offline</span></div>
     </div>
-    <div id="assignedRoute" style="opacity:0.85;font-size:0.95rem;">Loading your assignment...</div>
+    <div id="assignedRoute" style="opacity:0.85;font-size:0.95rem;" data-i18n="loading">Loading your assignment...</div>
     <div style="margin-top:0.75rem;font-size:0.8rem;opacity:0.65;" id="lastUpdateTime"></div>
   </div>
 
@@ -62,11 +62,11 @@
     <div style="margin-top:1.25rem;display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
       <div>
         <div class="form-label" style="margin-bottom:0.3rem;" data-i18n="speed_kmh">Speed (km/h)</div>
-        <input type="number" id="speedInput" class="form-control" value="0" min="0" max="120" placeholder="Current speed">
+        <input type="number" id="speedInput" class="form-control" value="0" min="0" max="120" placeholder="0">
       </div>
       <div>
         <div class="form-label" style="margin-bottom:0.3rem;" data-i18n="service_override">Service Override</div>
-        <input type="text" id="serviceInput" class="form-control" placeholder="Auto-filled" id="serviceOverride">
+        <input type="text" id="serviceInput" class="form-control" placeholder="Auto-filled">
       </div>
     </div>
 
@@ -91,7 +91,7 @@
 
 </div>
 
-<div id="toast-container"></div>
+<div id="toast-container" style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;pointer-events:none;"></div>
 
 <script>
 // ── Clock ──────────────────────────────────────────────
@@ -110,14 +110,16 @@ async function loadDriverInfo() {
     const res  = await fetch('/api/driver/info');
     if (res.status === 401) { window.location.href = '/driver/login'; return; }
     const data = await res.json();
+    const lang = localStorage.getItem('lang') || 'en';
+    
     if (data.assigned_service) {
       assignedServiceNo = data.assigned_service.service_no;
       document.getElementById('assignedServiceNo').textContent = assignedServiceNo;
       document.getElementById('assignedRoute').textContent = data.assigned_service.route || 'Route details unavailable';
       document.getElementById('serviceInput').value = assignedServiceNo;
     } else {
-      document.getElementById('assignedServiceNo').textContent = 'Unassigned';
-      document.getElementById('assignedRoute').textContent = 'No service assigned. Contact admin.';
+      document.getElementById('assignedServiceNo').textContent = translations[lang].not_assigned || 'Unassigned';
+      document.getElementById('assignedRoute').textContent = translations[lang].not_assigned || 'No service assigned. Contact admin.';
     }
   } catch(e) { addLog('Failed to load driver info: ' + e.message, 'error'); }
 }
@@ -128,14 +130,16 @@ let watchId = null;
 
 function setLiveStatus(live) {
   const el = document.getElementById('liveStatusBadge');
+  const lang = localStorage.getItem('lang') || 'en';
   el.innerHTML = live
-    ? '<span class="dot-live"></span> Live Broadcasting'
-    : '<span class="dot-off"></span> Offline';
+    ? `<span class="dot-live"></span> ${translations[lang].live_broadcasting || 'Live Broadcasting'}`
+    : `<span class="dot-off"></span> ${translations[lang].offline || 'Offline'}`;
   el.style.color = live ? 'var(--success)' : '';
 }
 
 async function sendLocation(lat, lng, speed) {
   const serviceNo = document.getElementById('serviceInput').value || assignedServiceNo;
+  const lang = localStorage.getItem('lang') || 'en';
   if (!serviceNo) { addLog('No service number! Contact admin.', 'error'); return; }
 
   try {
@@ -147,9 +151,11 @@ async function sendLocation(lat, lng, speed) {
     const d = await res.json();
     const ist = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false });
     if (res.ok) {
-      addLog(`[${ist}] ✅ Location sent: ${lat.toFixed(5)}, ${lng.toFixed(5)} @ ${speed} km/h`);
+      const sentLabel = translations[lang].location_sent || "Location sent";
+      addLog(`[${ist}] ✅ ${sentLabel}: ${lat.toFixed(5)}, ${lng.toFixed(5)} @ ${speed} km/h`);
       document.getElementById('coordDisplay').textContent = `📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-      document.getElementById('lastUpdateTime').textContent = `Last update: ${ist} IST`;
+      const updatedLabel = translations[lang].last_update || "Last update";
+      document.getElementById('lastUpdateTime').textContent = `${updatedLabel}: ${ist} IST`;
     } else {
       addLog(`[${ist}] ❌ Error: ${d.error}`, 'error');
     }
@@ -158,9 +164,10 @@ async function sendLocation(lat, lng, speed) {
 
 function startBroadcast() {
   if (!navigator.geolocation) { showToast('Geolocation not supported', 'error'); return; }
+  const lang = localStorage.getItem('lang') || 'en';
 
   document.getElementById('startBtn').disabled = true;
-  document.getElementById('startBtn').textContent = '📡 Broadcasting...';
+  document.getElementById('startBtn').innerHTML = `📡 ${translations[lang].live_broadcasting || 'Broadcasting...'}`;
   document.getElementById('stopBtn').disabled = false;
   setLiveStatus(true);
 
@@ -174,7 +181,6 @@ function startBroadcast() {
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
   );
 
-  // Fallback interval in case watchPosition is slow
   broadcastInterval = setInterval(() => {
     navigator.geolocation.getCurrentPosition(
       pos => {
@@ -188,13 +194,15 @@ function startBroadcast() {
 }
 
 function stopBroadcast() {
+  const lang = localStorage.getItem('lang') || 'en';
   if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
   if (broadcastInterval) { clearInterval(broadcastInterval); broadcastInterval = null; }
   document.getElementById('startBtn').disabled = false;
-  document.getElementById('startBtn').textContent = '📡 Start Broadcasting Location';
+  document.getElementById('startBtn').innerHTML = `📡 <span data-i18n="start_broadcast">${translations[lang].start_broadcast || 'Start Broadcasting Location'}</span>`;
   document.getElementById('stopBtn').disabled = true;
   setLiveStatus(false);
-  addLog('Broadcast stopped.');
+  const stopMsg = lang === 'te' ? 'బ్రాడ్‌కాస్ట్ ఆపివేయబడింది.' : 'Broadcast stopped.';
+  addLog(stopMsg);
 }
 
 // ── Log ────────────────────────────────────────────────
@@ -213,7 +221,8 @@ function showToast(msg, type='info') {
   const t = document.createElement('div');
   t.className = `toast toast-${type}`;
   t.textContent = msg;
-  document.getElementById('toast-container').appendChild(t);
+  const container = document.getElementById('toast-container');
+  if (container) container.appendChild(t);
   setTimeout(() => t.remove(), 3200);
 }
 

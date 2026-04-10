@@ -3,6 +3,7 @@ const translations = {
     // Shared / Header
     app_title: "APSRTC Live",
     app_subtitle: "Visakhapatnam Bus Tracker",
+    navigation: "NAVIGATION",
     search_buses: "Search Buses",
     live_tracking: "Live Tracking",
     full_schedule: "Full Schedule",
@@ -42,6 +43,30 @@ const translations = {
     arrives: "Arrives",
     next_bus_in: "Next bus in",
     running: "Running",
+    found: "found",
+    buses: "buses",
+    bus: "bus",
+    next_in: "Next in",
+    departing_now: "Departing now!",
+    departing_soon: "Departing soon!",
+    min: "min",
+    search_placeholder: "Search destination or route...",
+
+    // Schedule Table
+    col_route: "ROUTE",
+    col_destination: "DESTINATION",
+    col_type: "TYPE",
+    col_departs: "DEPARTS",
+    col_arrives: "ARRIVES",
+    col_duration: "DURATION",
+    col_fare: "FARE",
+    col_next_bus: "NEXT BUS",
+    full_schedule_heading: "Full Schedule",
+
+    // Bus Types
+    metro_express: "Metro Express",
+    express: "Express",
+    ordinary: "Ordinary",
 
     // Live Tracking
     live_title: "📡 Live Bus Tracking",
@@ -88,8 +113,17 @@ const translations = {
     delete: "Delete",
     cancel: "Cancel",
 
-    // Driver Portal
-    driver_login: "Driver Login",
+    // Driver Portal / Login
+    driver_portal: "Driver Portal",
+    driver_subtitle: "Login with your driver credentials",
+    driver_username_label: "DRIVER USERNAME",
+    driver_username_placeholder: "Enter driver username",
+    password_label: "PASSWORD",
+    password_placeholder: "Enter password",
+    login_btn: "Login",
+    or_divider: "OR",
+    passenger_login: "Passenger Login",
+    driver_note: "Driver accounts are created by admins only. Contact your supervisor if you cannot log in.",
     driver_login_sub: "Login with your driver credentials",
     driver_dashboard: "Driver Dashboard",
     assigned_service: "Assigned Service",
@@ -101,19 +135,20 @@ const translations = {
     start_broadcast: "📡 Start Broadcasting Location",
     broadcast_log: "Broadcast Log",
     clear: "Clear",
+    stop_btn: "Stop",
     offline: "Offline",
     live_broadcasting: "Live Broadcasting",
     location_sent: "Location sent",
     location_updated: "Location updated successfully",
-    not_assigned: "No route assigned",
-    passenger_login: "Passenger Login",
+    not_assigned: "No route assigned yet",
     driver_info_box: "Driver accounts are created by admins only. Contact your supervisor if you cannot log in.",
-    update_location: "Update Location",
+    update_location: "Update My Location",
   },
   te: {
     // Shared / Header
     app_title: "APSRTC లైవ్",
     app_subtitle: "విశాఖపట్నం బస్ ట్రాకర్",
+    navigation: "నావిగేషన్",
     search_buses: "బస్సులు వెతకండి",
     live_tracking: "లైవ్ ట్రాకింగ్",
     full_schedule: "పూర్తి షెడ్యూల్",
@@ -153,6 +188,30 @@ const translations = {
     arrives: "చేరుకుంటుంది",
     next_bus_in: "తదుపరి బస్సు",
     running: "నడుస్తోంది",
+    found: "కనుగొనబడింది",
+    buses: "బస్సులు",
+    bus: "బస్సు",
+    next_in: "తదుపరి బస్సు",
+    departing_now: "ఇప్పుడే బయలుదేరుతోంది!",
+    departing_soon: "త్వరలో బయలుదేరుతోంది!",
+    min: "నిముషాల్లో",
+    search_placeholder: "గమ్యం లేదా మార్గం వెతకండి...",
+
+    // Schedule Table
+    col_route: "మార్గం",
+    col_destination: "గమ్యం",
+    col_type: "రకం",
+    col_departs: "బయలుదేరు",
+    col_arrives: "చేరుకొనే",
+    col_duration: "వ్యవధి",
+    col_fare: "చార్జీ",
+    col_next_bus: "తదుపరి బస్సు",
+    full_schedule_heading: "పూర్తి షెడ్యూల్",
+
+    // Bus Types
+    metro_express: "మెట్రో ఎక్స్ప్రెస్",
+    express: "ఎక్స్ప్రెస్",
+    ordinary: "సాధారణ",
 
     // Live Tracking
     live_title: "📡 లైవ్ బస్ ట్రాకింగ్",
@@ -199,8 +258,17 @@ const translations = {
     delete: "తొలగించు",
     cancel: "రద్దు",
 
-    // Driver Portal
-    driver_login: "డ్రైవర్ లాగిన్",
+    // Driver Portal / Login
+    driver_portal: "డ్రైవర్ పోర్టల్",
+    driver_subtitle: "మీ డ్రైవర్ వివరాలతో లాగిన్ చేయండి",
+    driver_username_label: "డ్రైవర్ పేరు",
+    driver_username_placeholder: "డ్రైవర్ పేరు నమోదు చేయండి",
+    password_label: "పాస్వర్డ్",
+    password_placeholder: "పాస్వర్డ్ నమోదు చేయండి",
+    login_btn: "లాగిన్",
+    or_divider: "లేదా",
+    passenger_login: "ప్రయాణికుల లాగిన్",
+    driver_note: "డ్రైవర్ ఖాతాలు అడ్మిన్లు మాత్రమే సృష్టిస్తారు. లాగిన్ కాలేకపోతే మీ సూపర్వైజర్ని సంప్రదించండి.",
     driver_login_sub: "మీ డ్రైవర్ వివరాలతో లాగిన్ అవ్వండి",
     driver_dashboard: "డ్రైవర్ డాష్‌బోర్డ్",
     assigned_service: "కేటాయించిన సర్వీస్",
@@ -212,20 +280,21 @@ const translations = {
     start_broadcast: "📡 లొకేషన్ బ్రాడ్‌కాస్ట్ ప్రారంభించండి",
     broadcast_log: "బ్రాడ్‌కాస్ట్ లాగ్",
     clear: "క్లియర్",
+    stop_btn: "ఆపండి",
     offline: "ఆఫ్‌లైన్",
     live_broadcasting: "లైవ్ బ్రాడ్‌కాస్టింగ్",
     location_sent: "లొకేషన్ పంపబడింది",
     location_updated: "లొకేషన్ విజయవంతంగా అప్‌డేట్ అయింది",
     not_assigned: "మార్గం కేటాయించబడలేదు",
-    passenger_login: "ప్రయాణీకుల లాగిన్",
     driver_info_box: "డ్రైవర్ ఖాతాలు అడ్మిన్ల ద్వారా మాత్రమే సృష్టించబడతాయి. మీరు లాగిన్ చేయలేకపోతే మీ సూపర్‌వైజర్‌ను సంప్రదించండి.",
     update_location: "లొకేషన్ అప్‌డేట్ చేయండి",
   },
   hi: {
     // Shared / Header
-    app_title: "APSRTC లైవ్",
-    app_subtitle: "విశాఖపట్నం బస్ ట్రాకర్",
-    search_buses: "बसों की खोज करें",
+    app_title: "APSRTC लाइव",
+    app_subtitle: "विशाखापत्तनम बस ट्रैकर",
+    navigation: "नेविगेशन",
+    search_buses: "बसें खोजें",
     live_tracking: "लाइव ट्रैकिंग",
     full_schedule: "पूरा शेड्यूल",
     admin_panel: "एडमिन पैनल",
@@ -264,6 +333,30 @@ const translations = {
     arrives: "आगमन",
     next_bus_in: "अगली बस",
     running: "चल रही है",
+    found: "पाया",
+    buses: "बसें",
+    bus: "बस",
+    next_in: "अगली",
+    departing_now: "अभी प्रस्थान हो रही है!",
+    departing_soon: "जल्द ही प्रस्थान होगी!",
+    min: "मिनट में",
+    search_placeholder: "गंतव्य या मार्ग खोजें...",
+
+    // Schedule Table
+    col_route: "मार्ग",
+    col_destination: "गंतव्य",
+    col_type: "प्रकार",
+    col_departs: "प्रस्थान",
+    col_arrives: "आगमन",
+    col_duration: "अवधि",
+    col_fare: "किराया",
+    col_next_bus: "अगली बस",
+    full_schedule_heading: "पूरा शेड्यूल",
+
+    // Bus Types
+    metro_express: "मेट्रो एक्सप्रेस",
+    express: "एक्सप्रेस",
+    ordinary: "साधारण",
 
     // Live Tracking
     live_title: "📡 लाइव बस ट्रैकिंग",
@@ -310,8 +403,17 @@ const translations = {
     delete: "हटाएं",
     cancel: "रद्द करें",
 
-    // Driver Portal
-    driver_login: "ड्राइवर लॉगिन",
+    // Driver Portal / Login
+    driver_portal: "ड्राइवर पोर्टल",
+    driver_subtitle: "अपने ड्राइवर क्रेडेंशियल से लॉगिन करें",
+    driver_username_label: "ड्राइवर उपयोगकर्ता नाम",
+    driver_username_placeholder: "ड्राइवर उपयोगकर्ता नाम दर्ज करें",
+    password_label: "पासवर्ड",
+    password_placeholder: "पासवर्ड दर्ज करें",
+    login_btn: "लॉगिन",
+    or_divider: "या",
+    passenger_login: "यात्री लॉगिन",
+    driver_note: "ड्राइवर खाते केवल एडमिन द्वारा बनाए जाते हैं। यदि लॉगिन नहीं कर पा रहे तो अपने सुपरवाइजर से संपर्क करें।",
     driver_login_sub: "अपने ड्राइवर क्रेडेंशियल्स के साथ लॉगिन करें",
     driver_dashboard: "ड्राइवर डैशबोर्ड",
     assigned_service: "सौंपा गया सेवा",
@@ -323,18 +425,21 @@ const translations = {
     start_broadcast: "📡 स्थान प्रसारण शुरू करें",
     broadcast_log: "प्रसारण लॉग",
     clear: "साफ करें",
+    stop_btn: "रुकें",
     offline: "ऑफ़लाइन",
     live_broadcasting: "लाइव प्रसारण",
     location_sent: "स्थान भेजा गया",
     location_updated: "स्थान सफलतापूर्वक अपडेट हुआ",
     not_assigned: "कोई मार्ग नहीं सौंपा गया",
-    passenger_login: "यात्री लॉगिन",
     driver_info_box: "ड्राइवर खाते केवल एडमिन द्वारा बनाए जाते हैं। यदि आप लॉगिन नहीं कर पा रहे हैं तो अपने पर्यवेक्षक से संपर्क करें।",
     update_location: "स्थान अपडेट करें",
   }
 };
 
+let currentLang = localStorage.getItem('lang') || 'en';
+
 function applyLanguage(lang) {
+  currentLang = lang;
   localStorage.setItem('lang', lang);
   
   // Text content
@@ -353,14 +458,30 @@ function applyLanguage(lang) {
     }
   });
 
+  // Dropdown options
+  document.querySelectorAll('[data-i18n-option]').forEach(el => {
+    const key = el.getAttribute('data-i18n-option');
+    if (translations[lang] && translations[lang][key]) {
+      el.textContent = translations[lang][key];
+    }
+  });
+
   // Highlight active language button
   document.querySelectorAll('.lang-btn').forEach(btn => {
-    const btnLang = btn.getAttribute('data-lang') || (btn.textContent.trim() === 'EN' ? 'en' : (btn.textContent.trim() === 'తె' ? 'te' : 'hi'));
+    const btnLang = btn.getAttribute('data-lang');
     btn.classList.toggle('active', btnLang === lang);
   });
   
   // Set HTML lang attribute
   document.documentElement.lang = lang;
+
+  // Trigger re-render of dynamic elements if functions exist
+  if (typeof renderResults === 'function' && typeof allResults !== 'undefined') {
+    renderResults(allResults);
+  }
+  if (typeof renderScheduleTable === 'function' && typeof schedData !== 'undefined') {
+    renderScheduleTable(schedData);
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

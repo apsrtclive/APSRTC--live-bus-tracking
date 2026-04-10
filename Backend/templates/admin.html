@@ -19,7 +19,10 @@
 <header class="app-header">
   <div class="header-logo">
     <div class="header-logo-icon">🚌</div>
-    <div><div>APSRTC Admin</div><div class="header-subtitle">Management Dashboard</div></div>
+    <div>
+      <div data-i18n="admin_dashboard">APSRTC Admin</div>
+      <div class="header-subtitle" data-i18n="management_dashboard">Management Dashboard</div>
+    </div>
   </div>
   <div class="header-spacer"></div>
   <div class="header-clock" id="headerClock"></div>
@@ -39,7 +42,7 @@
 
 <!-- ── Sidebar ── -->
 <nav class="sidebar">
-  <div class="sidebar-section-label">Dashboard</div>
+  <div class="sidebar-section-label" data-i18n="overview">Dashboard</div>
   <div class="sidebar-nav">
     <div class="sidebar-item active" id="nav-overview" onclick="showPanel('overview')">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -88,23 +91,23 @@
 
   <!-- ══ OVERVIEW ══ -->
   <div id="panel-overview" class="admin-panel-section active">
-    <h2 style="margin-bottom:1.5rem;">Dashboard Overview</h2>
+    <h2 style="margin-bottom:1.5rem;" data-i18n="overview">Dashboard Overview</h2>
     <div class="stats-grid" id="adminStats"></div>
     <div style="margin-top:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
       <div class="card card-body">
-        <h4 style="margin-bottom:1rem;">⚡ Quick Actions</h4>
+        <h4 style="margin-bottom:1rem;" data-i18n="quick_actions">⚡ Quick Actions</h4>
         <div style="display:flex;flex-direction:column;gap:0.5rem;">
-          <button class="btn btn-blue btn-sm" onclick="showPanel('routes')">➕ Add Route</button>
-          <button class="btn btn-blue btn-sm" onclick="showPanel('drivers')">➕ Add Driver</button>
-          <button class="btn btn-primary btn-sm" onclick="reseedSchedule()">🔄 Reseed Bus Schedule</button>
+          <button class="btn btn-blue btn-sm" onclick="showPanel('routes')" data-i18n="add_route">➕ Add Route</button>
+          <button class="btn btn-blue btn-sm" onclick="showPanel('drivers')" data-i18n="add_driver">➕ Add Driver</button>
+          <button class="btn btn-primary btn-sm" onclick="reseedSchedule()" data-i18n="reseed_schedule">🔄 Reseed Bus Schedule</button>
         </div>
       </div>
       <div class="card card-body">
-        <h4 style="margin-bottom:1rem;">ℹ️ System Info</h4>
+        <h4 style="margin-bottom:1rem;" data-i18n="system_info">ℹ️ System Info</h4>
         <div style="font-size:0.875rem;color:var(--text-muted);line-height:2;">
           <div>🗄️ Database: PostgreSQL</div>
           <div>🌐 Status: <span style="color:var(--success);">Online</span></div>
-          <div>📅 Updated: <span id="lastUpdated"></span></div>
+          <div>📅 <span data-i18n="last_update">Updated</span>: <span id="lastUpdated"></span></div>
         </div>
       </div>
     </div>
@@ -113,89 +116,128 @@
   <!-- ══ ROUTES ══ -->
   <div id="panel-routes" class="admin-panel-section">
     <div class="section-header">
-      <h2>Routes</h2>
-      <button class="btn btn-blue btn-sm" onclick="openModal('addRouteModal')">➕ Add Route</button>
+      <h2 data-i18n="routes">Routes</h2>
+      <button class="btn btn-blue btn-sm" onclick="openModal('addRouteModal')" data-i18n="add_route">➕ Add Route</button>
     </div>
     <div class="card"><div style="overflow-x:auto;">
-      <table class="data-table"><thead><tr><th>ID</th><th>Name</th><th>From</th><th>To</th><th>Actions</th></tr></thead>
-      <tbody id="routesTable"></tbody></table>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th data-i18n="username">Name</th>
+            <th data-i18n="from">From</th>
+            <th data-i18n="to">To</th>
+            <th data-i18n="quick_actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="routesTable"></tbody>
+      </table>
     </div></div>
   </div>
 
   <!-- ══ SERVICES ══ -->
   <div id="panel-services" class="admin-panel-section">
     <div class="section-header">
-      <h2>Services</h2>
-      <button class="btn btn-blue btn-sm" onclick="openModal('addServiceModal')">➕ Add Service</button>
+      <h2 data-i18n="services">Services</h2>
+      <button class="btn btn-blue btn-sm" onclick="openModal('addServiceModal')" data-i18n="add_service">➕ Add Service</button>
     </div>
     <div class="card"><div style="overflow-x:auto;">
-      <table class="data-table"><thead><tr><th>ID</th><th>Service No</th><th>Route</th><th>Type</th><th>Fare</th><th>Actions</th></tr></thead>
-      <tbody id="servicesTable"></tbody></table>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Service No</th>
+            <th data-i18n="routes">Route</th>
+            <th data-i18n="bus_type">Type</th>
+            <th data-i18n="fare">Fare</th>
+            <th data-i18n="quick_actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="servicesTable"></tbody>
+      </table>
     </div></div>
   </div>
 
   <!-- ══ VEHICLES ══ -->
   <div id="panel-vehicles" class="admin-panel-section">
     <div class="section-header">
-      <h2>Vehicles</h2>
-      <button class="btn btn-blue btn-sm" onclick="openModal('addVehicleModal')">➕ Add Vehicle</button>
+      <h2 data-i18n="vehicles">Vehicles</h2>
+      <button class="btn btn-blue btn-sm" onclick="openModal('addVehicleModal')" data-i18n="add_vehicle">➕ Add Vehicle</button>
     </div>
     <div class="card"><div style="overflow-x:auto;">
-      <table class="data-table"><thead><tr><th>ID</th><th>Vehicle No</th><th>Service</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody id="vehiclesTable"></tbody></table>
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>Vehicle No</th><th data-i18n="services">Service</th><th data-i18n="bus_status">Status</th><th data-i18n="quick_actions">Actions</th></tr></thead>
+        <tbody id="vehiclesTable"></tbody>
+      </table>
     </div></div>
   </div>
 
   <!-- ══ STOPS ══ -->
   <div id="panel-stops" class="admin-panel-section">
     <div class="section-header">
-      <h2>Stops</h2>
-      <button class="btn btn-blue btn-sm" onclick="openModal('addStopModal')">➕ Add Stop</button>
+      <h2 data-i18n="stops">Stops</h2>
+      <button class="btn btn-blue btn-sm" onclick="openModal('addStopModal')" data-i18n="add_stop">➕ Add Stop</button>
     </div>
     <div class="card"><div style="overflow-x:auto;">
-      <table class="data-table"><thead><tr><th>ID</th><th>Route</th><th>Stop Name</th><th>Lat</th><th>Lng</th><th>Order</th><th>Actions</th></tr></thead>
-      <tbody id="stopsTable"></tbody></table>
+      <table class="data-table">
+        <thead><tr><th>ID</th><th data-i18n="routes">Route</th><th data-i18n="stops">Stop Name</th><th>Lat</th><th>Lng</th><th>Order</th><th data-i18n="quick_actions">Actions</th></tr></thead>
+        <tbody id="stopsTable"></tbody>
+      </table>
     </div></div>
   </div>
 
   <!-- ══ DRIVERS ══ -->
   <div id="panel-drivers" class="admin-panel-section">
     <div class="section-header">
-      <h2>Drivers</h2>
-      <button class="btn btn-blue btn-sm" onclick="openModal('addDriverModal')">➕ Add Driver</button>
+      <h2 data-i18n="drivers">Drivers</h2>
+      <button class="btn btn-blue btn-sm" onclick="openModal('addDriverModal')" data-i18n="add_driver">➕ Add Driver</button>
     </div>
     <div class="card"><div style="overflow-x:auto;">
-      <table class="data-table"><thead><tr><th>ID</th><th>Username</th><th>Assigned Service</th><th>Actions</th></tr></thead>
-      <tbody id="driversTable"></tbody></table>
+      <table class="data-table">
+        <thead><tr><th>ID</th><th data-i18n="username">Username</th><th data-i18n="assigned_service">Assigned Service</th><th data-i18n="quick_actions">Actions</th></tr></thead>
+        <tbody id="driversTable"></tbody>
+      </table>
     </div></div>
   </div>
 
   <!-- ══ BUS SCHEDULE ══ -->
   <div id="panel-schedule" class="admin-panel-section">
     <div class="section-header">
-      <h2>Bus Schedule (129 routes)</h2>
+      <h2 data-i18n="bus_schedule">Bus Schedule</h2>
       <div style="display:flex;gap:0.5rem;">
-        <input type="text" id="schedSearch" class="form-control form-control-sm" style="max-width:200px;" placeholder="Search..." oninput="filterSched()">
-        <button class="btn btn-primary btn-sm" onclick="reseedSchedule()">🔄 Re-seed</button>
+        <input type="text" id="schedSearch" class="form-control form-control-sm" style="max-width:200px;" data-i18n-placeholder="search_placeholder" placeholder="Search..." oninput="filterSched()">
+        <button class="btn btn-primary btn-sm" onclick="reseedSchedule()" data-i18n="reseed_schedule">🔄 Re-seed</button>
       </div>
     </div>
     <div class="card"><div style="overflow-x:auto;">
-      <table class="data-table"><thead><tr><th>Route</th><th>Destination</th><th>Type</th><th>Departure</th><th>Arrival</th><th>Duration</th><th>Fare</th></tr></thead>
-      <tbody id="schedTable"></tbody></table>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th data-i18n="col_route">Route</th>
+            <th data-i18n="col_destination">Destination</th>
+            <th data-i18n="col_type">Type</th>
+            <th data-i18n="col_departs">Departure</th>
+            <th data-i18n="col_arrives">Arrival</th>
+            <th data-i18n="col_duration">Duration</th>
+            <th data-i18n="col_fare">Fare</th>
+          </tr>
+        </thead>
+        <tbody id="schedTable"></tbody>
+      </table>
     </div></div>
   </div>
 
   <!-- ══ ADMINS ══ -->
   <div id="panel-admins" class="admin-panel-section">
     <div class="section-header">
-      <h2>Create Admin User</h2>
+      <h2 data-i18n="admins">Create Admin User</h2>
     </div>
     <div class="card card-body" style="max-width:460px;">
       <div class="form-grid">
-        <div class="form-group"><label class="form-label">Username</label><input type="text" id="newAdminUser" class="form-control" placeholder="Admin username"></div>
-        <div class="form-group"><label class="form-label">Password</label><input type="password" id="newAdminPass" class="form-control" placeholder="Strong password"></div>
+        <div class="form-group"><label class="form-label" data-i18n="username">Username</label><input type="text" id="newAdminUser" class="form-control" placeholder="Admin username"></div>
+        <div class="form-group"><label class="form-label" data-i18n="password">Password</label><input type="password" id="newAdminPass" class="form-control" placeholder="Strong password"></div>
       </div>
-      <button class="btn btn-blue" style="margin-top:1rem;" onclick="createAdmin()">Create Admin</button>
+      <button class="btn btn-blue" style="margin-top:1rem;" onclick="createAdmin()" data-i18n="create_account">Create Admin</button>
     </div>
   </div>
 
@@ -207,16 +249,16 @@
 <!-- Add Route Modal -->
 <div id="addRouteModal" class="modal-overlay hidden">
   <div class="modal-card">
-    <div class="modal-header"><h3 class="modal-title">Add Route</h3><button class="modal-close" onclick="closeModal('addRouteModal')">✕</button></div>
+    <div class="modal-header"><h3 class="modal-title" data-i18n="add_route">Add Route</h3><button class="modal-close" onclick="closeModal('addRouteModal')">✕</button></div>
     <div style="display:flex;flex-direction:column;gap:1rem;">
       <div class="form-group"><label class="form-label">Route Name</label><input type="text" id="rName" class="form-control" placeholder="e.g. Gajuwaka → Beach Road"></div>
       <div class="form-grid">
-        <div class="form-group"><label class="form-label">From Station</label><input type="text" id="rFrom" class="form-control" placeholder="From"></div>
-        <div class="form-group"><label class="form-label">To Station</label><input type="text" id="rTo" class="form-control" placeholder="To"></div>
+        <div class="form-group"><label class="form-label" data-i18n="from">From Station</label><input type="text" id="rFrom" class="form-control" placeholder="From"></div>
+        <div class="form-group"><label class="form-label" data-i18n="to">To Station</label><input type="text" id="rTo" class="form-control" placeholder="To"></div>
       </div>
       <div style="display:flex;gap:0.75rem;justify-content:flex-end;">
-        <button class="btn btn-ghost" onclick="closeModal('addRouteModal')">Cancel</button>
-        <button class="btn btn-blue" onclick="addRoute()">Add Route</button>
+        <button class="btn btn-ghost" onclick="closeModal('addRouteModal')" data-i18n="cancel">Cancel</button>
+        <button class="btn btn-blue" onclick="addRoute()" data-i18n="add_route">Add Route</button>
       </div>
     </div>
   </div>
@@ -225,84 +267,27 @@
 <!-- Add Service Modal -->
 <div id="addServiceModal" class="modal-overlay hidden">
   <div class="modal-card">
-    <div class="modal-header"><h3 class="modal-title">Add Service</h3><button class="modal-close" onclick="closeModal('addServiceModal')">✕</button></div>
+    <div class="modal-header"><h3 class="modal-title" data-i18n="add_service">Add Service</h3><button class="modal-close" onclick="closeModal('addServiceModal')">✕</button></div>
     <div style="display:flex;flex-direction:column;gap:1rem;">
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Service No</label><input type="text" id="sNo" class="form-control" placeholder="e.g. 28A"></div>
         <div class="form-group"><label class="form-label">Route ID</label><input type="number" id="sRoute" class="form-control" placeholder="Route ID"></div>
       </div>
       <div class="form-grid">
-        <div class="form-group"><label class="form-label">Service Type</label>
+        <div class="form-group"><label class="form-label" data-i18n="bus_type">Service Type</label>
           <select id="sType" class="form-control"><option>Express</option><option>Metro Express</option><option>Ordinary</option></select>
         </div>
-        <div class="form-group"><label class="form-label">Ticket Price (₹)</label><input type="number" id="sPrice" class="form-control" placeholder="0"></div>
+        <div class="form-group"><label class="form-label" data-i18n="fare">Ticket Price (₹)</label><input type="number" id="sPrice" class="form-control" placeholder="0"></div>
       </div>
       <div style="display:flex;gap:0.75rem;justify-content:flex-end;">
-        <button class="btn btn-ghost" onclick="closeModal('addServiceModal')">Cancel</button>
-        <button class="btn btn-blue" onclick="addService()">Add Service</button>
+        <button class="btn btn-ghost" onclick="closeModal('addServiceModal')" data-i18n="cancel">Cancel</button>
+        <button class="btn btn-blue" onclick="addService()" data-i18n="add_service">Add Service</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Add Vehicle Modal -->
-<div id="addVehicleModal" class="modal-overlay hidden">
-  <div class="modal-card">
-    <div class="modal-header"><h3 class="modal-title">Add Vehicle</h3><button class="modal-close" onclick="closeModal('addVehicleModal')">✕</button></div>
-    <div style="display:flex;flex-direction:column;gap:1rem;">
-      <div class="form-grid">
-        <div class="form-group"><label class="form-label">Vehicle No</label><input type="text" id="vNo" class="form-control" placeholder="AP31 AB 1234"></div>
-        <div class="form-group"><label class="form-label">Service ID</label><input type="number" id="vService" class="form-control" placeholder="Service ID"></div>
-      </div>
-      <div class="form-group"><label class="form-label">Status</label>
-        <select id="vStatus" class="form-control"><option>Running</option><option>Stopped</option><option>Maintenance</option></select>
-      </div>
-      <div style="display:flex;gap:0.75rem;justify-content:flex-end;">
-        <button class="btn btn-ghost" onclick="closeModal('addVehicleModal')">Cancel</button>
-        <button class="btn btn-blue" onclick="addVehicle()">Add Vehicle</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Add Stop Modal -->
-<div id="addStopModal" class="modal-overlay hidden">
-  <div class="modal-card">
-    <div class="modal-header"><h3 class="modal-title">Add Stop</h3><button class="modal-close" onclick="closeModal('addStopModal')">✕</button></div>
-    <div style="display:flex;flex-direction:column;gap:1rem;">
-      <div class="form-grid">
-        <div class="form-group"><label class="form-label">Route ID</label><input type="number" id="stRoute" class="form-control"></div>
-        <div class="form-group"><label class="form-label">Stop Name</label><input type="text" id="stName" class="form-control"></div>
-      </div>
-      <div class="form-grid">
-        <div class="form-group"><label class="form-label">Latitude</label><input type="number" step="any" id="stLat" class="form-control" placeholder="17.7xxx"></div>
-        <div class="form-group"><label class="form-label">Longitude</label><input type="number" step="any" id="stLng" class="form-control" placeholder="83.3xxx"></div>
-      </div>
-      <div class="form-group"><label class="form-label">Stop Order</label><input type="number" id="stOrder" class="form-control" value="1"></div>
-      <div style="display:flex;gap:0.75rem;justify-content:flex-end;">
-        <button class="btn btn-ghost" onclick="closeModal('addStopModal')">Cancel</button>
-        <button class="btn btn-blue" onclick="addStop()">Add Stop</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Add Driver Modal -->
-<div id="addDriverModal" class="modal-overlay hidden">
-  <div class="modal-card">
-    <div class="modal-header"><h3 class="modal-title">Add Driver</h3><button class="modal-close" onclick="closeModal('addDriverModal')">✕</button></div>
-    <div style="display:flex;flex-direction:column;gap:1rem;">
-      <div class="form-group"><label class="form-label">Username</label><input type="text" id="dUser" class="form-control" placeholder="driver_username"></div>
-      <div class="form-group"><label class="form-label">Password</label><input type="password" id="dPass" class="form-control" placeholder="Strong password"></div>
-      <div style="display:flex;gap:0.75rem;justify-content:flex-end;">
-        <button class="btn btn-ghost" onclick="closeModal('addDriverModal')">Cancel</button>
-        <button class="btn btn-blue" onclick="addDriver()">Add Driver</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div id="toast-container"></div>
+<div id="toast-container" style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;pointer-events:none;"></div>
 
 <script>
 // ── Clock ──────────────────────────────────────────────
@@ -336,13 +321,15 @@ async function showPanel(name) {
 // ── Stats ──────────────────────────────────────────────
 async function loadStats() {
   const d = await (await fetch('/api/dashboard')).json();
+  const lang = localStorage.getItem('lang') || 'en';
+  
   document.getElementById('adminStats').innerHTML = `
-    <div class="stat-card"><div class="stat-icon stat-icon-blue">🗺️</div><div class="stat-value">${d.total_routes}</div><div class="stat-label">Routes</div></div>
-    <div class="stat-card"><div class="stat-icon stat-icon-orange">🚌</div><div class="stat-value">${d.total_services}</div><div class="stat-label">Services</div></div>
-    <div class="stat-card"><div class="stat-icon stat-icon-blue">🚍</div><div class="stat-value">${d.total_vehicles}</div><div class="stat-label">Vehicles</div></div>
-    <div class="stat-card"><div class="stat-icon stat-icon-green">✅</div><div class="stat-value">${d.running_buses}</div><div class="stat-label">Running</div></div>
-    <div class="stat-card"><div class="stat-icon stat-icon-yellow">👤</div><div class="stat-value">${d.total_drivers}</div><div class="stat-label">Drivers</div></div>
-    <div class="stat-card"><div class="stat-icon stat-icon-orange">📅</div><div class="stat-value">${d.total_schedules}</div><div class="stat-label">Schedules</div></div>
+    <div class="stat-card"><div class="stat-icon stat-icon-blue">🗺️</div><div class="stat-value">${d.total_routes}</div><div class="stat-label">${translations[lang].routes || 'Routes'}</div></div>
+    <div class="stat-card"><div class="stat-icon stat-icon-orange">🚌</div><div class="stat-value">${d.total_services}</div><div class="stat-label">${translations[lang].services || 'Services'}</div></div>
+    <div class="stat-card"><div class="stat-icon stat-icon-blue">🚍</div><div class="stat-value">${d.total_vehicles}</div><div class="stat-label">${translations[lang].vehicles || 'Vehicles'}</div></div>
+    <div class="stat-card"><div class="stat-icon stat-icon-green">✅</div><div class="stat-value">${d.running_buses}</div><div class="stat-label">${translations[lang].running || 'Running'}</div></div>
+    <div class="stat-card"><div class="stat-icon stat-icon-yellow">👤</div><div class="stat-value">${d.total_drivers}</div><div class="stat-label">${translations[lang].drivers || 'Drivers'}</div></div>
+    <div class="stat-card"><div class="stat-icon stat-icon-orange">📅</div><div class="stat-value">${d.total_schedules}</div><div class="stat-label">${translations[lang].bus_schedule || 'Schedules'}</div></div>
   `;
 }
 
@@ -358,16 +345,21 @@ function toast(msg, type='success') {
   const t = document.createElement('div');
   t.className = `toast toast-${type}`;
   t.innerHTML = (type==='success'?'✅ ':'❌ ') + msg;
-  document.getElementById('toast-container').appendChild(t);
+  const container = document.getElementById('toast-container');
+  if (container) container.appendChild(t);
   setTimeout(() => t.remove(), 3200);
 }
 
 function delBtn(url, reload) {
-  return `<button class="btn btn-danger btn-sm" onclick="confirmDelete('${url}',${reload})">Delete</button>`;
+  const lang = localStorage.getItem('lang') || 'en';
+  const label = translations[lang].delete || 'Delete';
+  return `<button class="btn btn-danger btn-sm" onclick="confirmDelete('${url}',${reload})">${label}</button>`;
 }
 
 async function confirmDelete(url, reload) {
-  if (!confirm('Delete this record?')) return;
+  const lang = localStorage.getItem('lang') || 'en';
+  const confirmMsg = lang === 'te' ? 'ఈ రికార్డును తొలగించాలా?' : 'Delete this record?';
+  if (!confirm(confirmMsg)) return;
   try {
     await api(url, {method:'DELETE'});
     toast('Deleted successfully'); reload();
@@ -381,9 +373,10 @@ function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 // ── Routes ────────────────────────────────────────────
 async function loadRoutes() {
   const rows = await (await fetch('/api/admin/routes')).json();
+  const lang = localStorage.getItem('lang') || 'en';
   document.getElementById('routesTable').innerHTML = rows.length
     ? rows.map(r => `<tr><td>${r.route_id}</td><td>${r.route_name}</td><td>${r.from}</td><td>${r.to}</td><td>${delBtn('/api/admin/delete_route/'+r.route_id,loadRoutes)}</td></tr>`).join('')
-    : '<tr><td colspan="5" class="text-muted" style="padding:2rem;text-align:center;">No routes found</td></tr>';
+    : `<tr><td colspan="5" class="text-muted" style="padding:2rem;text-align:center;">${translations[lang].no_results || 'No routes found'}</td></tr>`;
 }
 async function addRoute() {
   try {
@@ -395,9 +388,10 @@ async function addRoute() {
 // ── Services ──────────────────────────────────────────
 async function loadServices() {
   const rows = await (await fetch('/api/admin/services')).json();
+  const lang = localStorage.getItem('lang') || 'en';
   document.getElementById('servicesTable').innerHTML = rows.length
     ? rows.map(s => `<tr><td>${s.service_id}</td><td><strong>${s.service_no}</strong></td><td>${s.route_name}</td><td><span class="badge badge-blue">${s.service_type}</span></td><td>₹${s.ticket_price}</td><td>${delBtn('/api/admin/delete_service/'+s.service_id,loadServices)}</td></tr>`).join('')
-    : '<tr><td colspan="6" class="text-muted" style="padding:2rem;text-align:center;">No services found</td></tr>';
+    : `<tr><td colspan="6" class="text-muted" style="padding:2rem;text-align:center;">${translations[lang].no_results || 'No services found'}</td></tr>`;
 }
 async function addService() {
   try {
@@ -409,9 +403,10 @@ async function addService() {
 // ── Vehicles ──────────────────────────────────────────
 async function loadVehicles() {
   const rows = await (await fetch('/api/admin/vehicles')).json();
+  const lang = localStorage.getItem('lang') || 'en';
   document.getElementById('vehiclesTable').innerHTML = rows.length
     ? rows.map(v => `<tr><td>${v.vehicle_id}</td><td><strong>${v.vehicle_no}</strong></td><td>${v.service_no}</td><td><span class="badge ${v.status==='Running'?'badge-green':'badge-gray'}">${v.status}</span></td><td>${delBtn('/api/admin/delete_vehicle/'+v.vehicle_id,loadVehicles)}</td></tr>`).join('')
-    : '<tr><td colspan="5" class="text-muted" style="padding:2rem;text-align:center;">No vehicles</td></tr>';
+    : `<tr><td colspan="5" class="text-muted" style="padding:2rem;text-align:center;">${translations[lang].no_results || 'No vehicles'}</td></tr>`;
 }
 async function addVehicle() {
   try {
@@ -423,9 +418,10 @@ async function addVehicle() {
 // ── Stops ─────────────────────────────────────────────
 async function loadStops() {
   const rows = await (await fetch('/api/admin/stops')).json();
+  const lang = localStorage.getItem('lang') || 'en';
   document.getElementById('stopsTable').innerHTML = rows.length
     ? rows.map(s => `<tr><td>${s.stop_id}</td><td>${s.route_name}</td><td>${s.stop_name}</td><td>${s.lat||'-'}</td><td>${s.lng||'-'}</td><td>${s.stop_order}</td><td>${delBtn('/api/admin/delete_stop/'+s.stop_id,loadStops)}</td></tr>`).join('')
-    : '<tr><td colspan="7" class="text-muted" style="padding:2rem;text-align:center;">No stops</td></tr>';
+    : `<tr><td colspan="7" class="text-muted" style="padding:2rem;text-align:center;">${translations[lang].no_results || 'No stops'}</td></tr>`;
 }
 async function addStop() {
   try {
@@ -437,9 +433,10 @@ async function addStop() {
 // ── Drivers ───────────────────────────────────────────
 async function loadDrivers() {
   const rows = await (await fetch('/api/admin/drivers')).json();
+  const lang = localStorage.getItem('lang') || 'en';
   document.getElementById('driversTable').innerHTML = rows.length
     ? rows.map(d => `<tr><td>${d.id}</td><td><strong>${d.username}</strong></td><td>${d.assigned_service?d.assigned_service.service_no:'<span class="text-muted">Unassigned</span>'}</td><td>${delBtn('/api/admin/delete_driver/'+d.id,loadDrivers)}</td></tr>`).join('')
-    : '<tr><td colspan="4" class="text-muted" style="padding:2rem;text-align:center;">No drivers</td></tr>';
+    : `<tr><td colspan="4" class="text-muted" style="padding:2rem;text-align:center;">${translations[lang].no_results || 'No drivers'}</td></tr>`;
 }
 async function addDriver() {
   try {
@@ -463,7 +460,9 @@ function renderSched(rows) {
   document.getElementById('schedTable').innerHTML = rows.map(b => `<tr><td><strong>${b.route_code}</strong></td><td>${b.destination}</td><td><span class="badge ${b.bus_type==='Metro Express'?'badge-orange':b.bus_type==='Express'?'badge-blue':'badge-gray'}">${b.bus_type}</span></td><td>${b.departure_time}</td><td>${b.arrival_time}</td><td>${b.duration}</td><td>₹${b.fare}</td></tr>`).join('');
 }
 async function reseedSchedule() {
-  if (!confirm('Re-seed all 129 bus schedule entries? Existing data will be replaced.')) return;
+  const lang = localStorage.getItem('lang') || 'en';
+  const confirmMsg = lang === 'te' ? 'షెడ్యూల్ మొత్తం రీసీడ్ చేయాలా? పాత డేటా పోతుంది.' : 'Re-seed all bus schedule entries? Existing data will be replaced.';
+  if (!confirm(confirmMsg)) return;
   try {
     const d = await api('/api/admin/force_seed');
     toast(d.message || 'Reseeded!'); schedData = []; loadSchedule();
