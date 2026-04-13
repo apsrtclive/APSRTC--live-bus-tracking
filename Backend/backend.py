@@ -11,7 +11,7 @@ import threading
 from datetime import timedelta, datetime
 from functools import wraps
 
-from flask import Flask, jsonify, request, render_template, session, redirect, url_for
+from flask import Flask, jsonify, request, render_template, session, redirect, url_for, make_response
 from flask_cors import CORS
 from flask_caching import Cache
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -624,7 +624,9 @@ def user_login():
 @app.route("/api/user/logout", methods=["POST"])
 def user_logout():
     session.clear()
-    return jsonify({"message": "Logged out", "redirect": "/login"})
+    response = make_response(jsonify({"message": "Logged out", "redirect": "/login"}))
+    response.delete_cookie('session')
+    return response
 
 
 # ═══════════════════════════════════════════════════════
@@ -669,7 +671,9 @@ def driver_login():
 @app.route("/api/driver/logout", methods=["POST"])
 def driver_logout():
     session.clear()
-    return jsonify({"message": "Logged out", "redirect": "/driver/login"})
+    response = make_response(jsonify({"message": "Logged out", "redirect": "/driver/login"}))
+    response.delete_cookie('session')
+    return response
 
 
 @app.route("/api/driver/info")
