@@ -163,30 +163,6 @@ async function handleRegister() {
 
   btn.disabled = false; btn.textContent = translations[lang].create_account || 'Create Account';
 }
-</script>ue;
-  if (!user || !pass) return showMsg('Please fill all fields', 'error');
-  if (pass.length < 6) return showMsg('Password must be at least 6 characters', 'error');
-
-  const btn = document.querySelector('#registerForm .btn-primary');
-  btn.disabled = true; btn.textContent = 'Creating...';
-
-  try {
-    const res  = await fetch('/api/user/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: user, password: pass })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      showMsg(data.message, 'success');
-      setTimeout(toggleForms, 1500);
-    } else {
-      showMsg(data.error || 'Registration failed', 'error');
-    }
-  } catch(e) { showMsg('Server error', 'error'); }
-
-  btn.disabled = false; btn.textContent = I18N[lang].createAccount || 'Create Account';
-}
 </script>
 </body>
 </html>
