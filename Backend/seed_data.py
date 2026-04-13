@@ -1,11 +1,52 @@
 """
-seed_data.py  —  Seeds 129 APSRTC Visakhapatnam bus routes into the BusSchedule table.
-Called once from backend.py on startup when the table is empty.
+seed_data.py  —  Seeds expanded APSRTC bus routes into the BusSchedule table.
+Includes original RTC Complex routes, reverse routes, and new inter-destination routes.
 """
 
-BUS_SCHEDULE_DATA = [
-    # ─── Gajuwaka (15 buses) ──────────────── ~18 km ─────────────────────────
-    # Metro Express: 35m, Express: 45m, Ordinary: 1h 5m
+from datetime import datetime, timedelta
+
+# List of major stations
+STATIONS = [
+    "RTC Complex", "Anakapalle", "Bheemili", "Gajuwaka", "Kurmannapalem",
+    "Madhurawada", "NAD Junction", "Pendurthi", "Rushikonda", "Simhachalam", "Steel Plant"
+]
+
+def generate_schedule(source, dest, start_h=5, end_h=21, interval_min=25, duration_str="45m", base_fare=20):
+    """Generate a list of schedules between two points throughout the day."""
+    schedules = []
+    current = datetime.strptime(f"{start_h:02d}:00", "%H:%M")
+    end_time = datetime.strptime(f"{end_h:02d}:00", "%H:%M")
+    
+    # Calculate duration in minutes for arrival calculation
+    if 'h' in duration_str:
+        h_part, m_part = duration_str.split('h')
+        dur_mins = int(h_part.strip()) * 60 + (int(m_part.replace('m','').strip()) if m_part.strip() else 0)
+    else:
+        dur_mins = int(duration_str.replace('m','').strip())
+
+    counter = 1
+    while current <= end_time:
+        dep_str = current.strftime("%H:%M")
+        arr_dt = current + timedelta(minutes=dur_mins)
+        arr_str = arr_dt.strftime("%H:%M")
+        
+        # Mix bus types
+        if counter % 3 == 0: bus_type = "Metro Express"
+        elif counter % 3 == 1: bus_type = "Express"
+        else: bus_type = "Ordinary"
+        
+        # Unique ID placeholder
+        route_id = f"R-{source[:3]}-{dest[:3]}-{counter:02d}".upper().replace(' ','')
+        
+        schedules.append((route_id, source, dest, bus_type, dep_str, arr_str, duration_str, base_fare))
+        
+        current += timedelta(minutes=interval_min)
+        counter += 1
+    return schedules
+
+# ─── Original RTC Complex Data (Condensed Sample for ID reference) ───
+ORIGINAL_DATA = [
+    # Gajuwaka (15)
     ("VZ001", "RTC Complex", "Gajuwaka", "Metro Express", "05:00", "05:35", "35m", 25),
     ("VZ002", "RTC Complex", "Gajuwaka", "Express",       "05:15", "06:00", "45m", 18),
     ("VZ003", "RTC Complex", "Gajuwaka", "Ordinary",      "05:30", "06:35", "1h 5m", 12),
@@ -22,8 +63,7 @@ BUS_SCHEDULE_DATA = [
     ("VZ014", "RTC Complex", "Gajuwaka", "Metro Express", "19:00", "19:35", "35m", 25),
     ("VZ015", "RTC Complex", "Gajuwaka", "Ordinary",      "21:00", "22:05", "1h 5m", 12),
 
-    # ─── NAD Junction (13 buses) ─────────── ~12 km ─────────────────────────
-    # Metro Express: 25m, Express: 35m, Ordinary: 50m
+    # NAD Junction (13)
     ("VZ016", "RTC Complex", "NAD Junction", "Metro Express", "05:00", "05:25", "25m", 18),
     ("VZ017", "RTC Complex", "NAD Junction", "Express",       "05:20", "05:55", "35m", 12),
     ("VZ018", "RTC Complex", "NAD Junction", "Ordinary",      "05:45", "06:35", "50m", 8),
@@ -38,8 +78,7 @@ BUS_SCHEDULE_DATA = [
     ("VZ027", "RTC Complex", "NAD Junction", "Metro Express", "18:30", "18:55", "25m", 18),
     ("VZ028", "RTC Complex", "NAD Junction", "Ordinary",      "20:30", "21:20", "50m", 8),
 
-    # ─── Steel Plant (13 buses) ──────────── ~20 km ─────────────────────────
-    # Metro Express: 45m, Express: 1h, Ordinary: 1h 20m
+    # Steel Plant (13)
     ("VZ029", "RTC Complex", "Steel Plant", "Metro Express", "05:00", "05:45", "45m", 28),
     ("VZ030", "RTC Complex", "Steel Plant", "Express",       "05:30", "06:30", "1h", 20),
     ("VZ031", "RTC Complex", "Steel Plant", "Ordinary",      "06:00", "07:20", "1h 20m", 14),
@@ -54,8 +93,7 @@ BUS_SCHEDULE_DATA = [
     ("VZ040", "RTC Complex", "Steel Plant", "Metro Express", "18:00", "18:45", "45m", 28),
     ("VZ041", "RTC Complex", "Steel Plant", "Ordinary",      "20:00", "21:20", "1h 20m", 14),
 
-    # ─── Simhachalam (13 buses) ──────────── ~15 km ─────────────────────────
-    # Metro Express: 30m, Express: 42m, Ordinary: 1h
+    # Simhachalam (13)
     ("VZ042", "RTC Complex", "Simhachalam", "Metro Express", "05:10", "05:40", "30m", 20),
     ("VZ043", "RTC Complex", "Simhachalam", "Express",       "05:30", "06:12", "42m", 15),
     ("VZ044", "RTC Complex", "Simhachalam", "Ordinary",      "06:00", "07:00", "1h", 10),
@@ -70,8 +108,7 @@ BUS_SCHEDULE_DATA = [
     ("VZ053", "RTC Complex", "Simhachalam", "Metro Express", "18:00", "18:30", "30m", 20),
     ("VZ054", "RTC Complex", "Simhachalam", "Ordinary",      "20:30", "21:30", "1h", 10),
 
-    # ─── Pendurthi (12 buses) ────────────── ~25 km ─────────────────────────
-    # Metro Express: 50m, Express: 1h 10m, Ordinary: 1h 30m
+    # Pendurthi (12)
     ("VZ055", "RTC Complex", "Pendurthi", "Metro Express", "05:00", "05:50", "50m", 32),
     ("VZ056", "RTC Complex", "Pendurthi", "Express",       "05:30", "06:40", "1h 10m", 22),
     ("VZ057", "RTC Complex", "Pendurthi", "Ordinary",      "06:00", "07:30", "1h 30m", 15),
@@ -85,8 +122,7 @@ BUS_SCHEDULE_DATA = [
     ("VZ065", "RTC Complex", "Pendurthi", "Express",       "19:00", "20:10", "1h 10m", 22),
     ("VZ066", "RTC Complex", "Pendurthi", "Metro Express", "21:00", "21:50", "50m", 32),
 
-    # ─── Kurmannapalem (13 buses) ────────── ~8 km ──────────────────────────
-    # Metro Express: 18m, Express: 25m, Ordinary: 35m
+    # Kurmannapalem (13)
     ("VZ067", "RTC Complex", "Kurmannapalem", "Metro Express", "05:00", "05:18", "18m", 12),
     ("VZ068", "RTC Complex", "Kurmannapalem", "Express",       "05:15", "05:40", "25m", 8),
     ("VZ069", "RTC Complex", "Kurmannapalem", "Ordinary",      "05:30", "06:05", "35m", 5),
@@ -101,8 +137,7 @@ BUS_SCHEDULE_DATA = [
     ("VZ078", "RTC Complex", "Kurmannapalem", "Metro Express", "18:00", "18:18", "18m", 12),
     ("VZ079", "RTC Complex", "Kurmannapalem", "Ordinary",      "20:00", "20:35", "35m", 5),
 
-    # ─── Madhurawada (13 buses) ──────────── ~22 km ─────────────────────────
-    # Metro Express: 45m, Express: 1h, Ordinary: 1h 20m
+    # Madhurawada (13)
     ("VZ080", "RTC Complex", "Madhurawada", "Metro Express", "05:00", "05:45", "45m", 28),
     ("VZ081", "RTC Complex", "Madhurawada", "Express",       "05:30", "06:30", "1h", 20),
     ("VZ082", "RTC Complex", "Madhurawada", "Ordinary",      "06:00", "07:20", "1h 20m", 14),
@@ -117,8 +152,7 @@ BUS_SCHEDULE_DATA = [
     ("VZ091", "RTC Complex", "Madhurawada", "Metro Express", "19:30", "20:15", "45m", 28),
     ("VZ092", "RTC Complex", "Madhurawada", "Ordinary",      "21:00", "22:20", "1h 20m", 14),
 
-    # ─── Bheemili (12 buses) ─────────────── ~35 km ─────────────────────────
-    # Metro Express: 1h 10m, Express: 1h 30m, Ordinary: 1h 55m
+    # Bheemili (12)
     ("VZ093", "RTC Complex", "Bheemili", "Metro Express", "05:30", "06:40", "1h 10m", 42),
     ("VZ094", "RTC Complex", "Bheemili", "Express",       "06:00", "07:30", "1h 30m", 30),
     ("VZ095", "RTC Complex", "Bheemili", "Ordinary",      "06:30", "08:25", "1h 55m", 20),
@@ -132,8 +166,7 @@ BUS_SCHEDULE_DATA = [
     ("VZ103", "RTC Complex", "Bheemili", "Express",       "19:00", "20:30", "1h 30m", 30),
     ("VZ104", "RTC Complex", "Bheemili", "Metro Express", "21:00", "22:10", "1h 10m", 42),
 
-    # ─── Anakapalle (12 buses) ───────────── ~55 km ─────────────────────────
-    # Metro Express: 1h 40m, Express: 2h 10m, Ordinary: 2h 45m
+    # Anakapalle (12)
     ("VZ105", "RTC Complex", "Anakapalle", "Metro Express", "05:00", "06:40", "1h 40m", 65),
     ("VZ106", "RTC Complex", "Anakapalle", "Express",       "05:30", "07:40", "2h 10m", 48),
     ("VZ107", "RTC Complex", "Anakapalle", "Ordinary",      "06:00", "08:45", "2h 45m", 32),
@@ -147,8 +180,7 @@ BUS_SCHEDULE_DATA = [
     ("VZ115", "RTC Complex", "Anakapalle", "Express",       "18:30", "20:40", "2h 10m", 48),
     ("VZ116", "RTC Complex", "Anakapalle", "Metro Express", "20:00", "21:40", "1h 40m", 65),
 
-    # ─── Rushikonda (13 buses) ───────────── ~18 km ─────────────────────────
-    # Metro Express: 35m, Express: 48m, Ordinary: 1h 10m
+    # Rushikonda (13)
     ("VZ117", "RTC Complex", "Rushikonda", "Metro Express", "05:15", "05:50", "35m", 22),
     ("VZ118", "RTC Complex", "Rushikonda", "Express",       "05:45", "06:33", "48m", 16),
     ("VZ119", "RTC Complex", "Rushikonda", "Ordinary",      "06:15", "07:25", "1h 10m", 11),
@@ -164,27 +196,66 @@ BUS_SCHEDULE_DATA = [
     ("VZ129", "RTC Complex", "Rushikonda", "Ordinary",      "21:00", "22:10", "1h 10m", 11),
 ]
 
+def format_duration(mins):
+    if mins < 60: return f"{mins}m"
+    h = mins // 60
+    m = mins % 60
+    return f"{h}h {m}m" if m > 0 else f"{h}h"
 
 def seed_bus_schedule(db, BusSchedule):
-    """Insert all 129 bus schedule rows. Safe to call multiple times (skips if already seeded)."""
-    if BusSchedule.query.count() > 0:
-        print("[OK] Bus schedule already seeded — skipping.", flush=True)
+    """Insert original, reverse, and inter-destination routes."""
+    if BusSchedule.query.count() > 500:
+        print("[OK] Expanded bus schedule already seeded — skipping.", flush=True)
         return
 
-    print(f"[...] Seeding {len(BUS_SCHEDULE_DATA)} bus schedule entries...", flush=True)
-    rows = []
-    for row in BUS_SCHEDULE_DATA:
-        route_code, source, destination, bus_type, departure, arrival, duration, fare = row
-        rows.append(BusSchedule(
-            route_code=route_code,
-            source=source,
-            destination=destination,
-            bus_type=bus_type,
-            departure_time=departure,
-            arrival_time=arrival,
-            duration=duration,
-            fare=fare,
-        ))
-    db.session.bulk_save_objects(rows)
+    # 1. Clear existing schedule to allow clean re-seed
+    db.session.query(BusSchedule).delete()
     db.session.commit()
-    print(f"[OK] {len(rows)} bus schedule entries seeded successfully!", flush=True)
+
+    all_rows = []
+    
+    # --- PHASE 1: Add Original 129 Routes ---
+    for row in ORIGINAL_DATA:
+        route_code, src, dest, b_type, dep, arr, dur, fare = row
+        all_rows.append(BusSchedule(
+            route_code=route_code, source=src, destination=dest,
+            bus_type=b_type, departure_time=dep, arrival_time=arr,
+            duration=dur, fare=fare
+        ))
+        
+        # --- PHASE 2: Generate Reverse Routes for each original ---
+        all_rows.append(BusSchedule(
+            route_code=f"R-{route_code}", source=dest, destination=src,
+            bus_type=b_type, departure_time=dep, arrival_time=arr, # Reuse times for simplicity
+            duration=dur, fare=fare
+        ))
+
+    # --- PHASE 3: Generate New Inter-Destination Routes ---
+    inter_configs = [
+        ("Gajuwaka", "Steel Plant", "25m", 15),
+        ("Gajuwaka", "NAD Junction", "30m", 18),
+        ("Madhurawada", "Rushikonda", "20m", 12),
+        ("Simhachalam", "Pendurthi", "35m", 20),
+        ("Anakapalle", "Bheemili", "1h 45m", 55),
+        ("Kurmannapalem", "NAD Junction", "25m", 15)
+    ]
+
+    for src, dest, dur, fare in inter_configs:
+        # A -> B
+        schedules_ab = generate_schedule(src, dest, duration_str=dur, base_fare=fare)
+        for s in schedules_ab:
+            all_rows.append(BusSchedule(
+                route_code=s[0], source=s[1], destination=s[2], bus_type=s[3],
+                departure_time=s[4], arrival_time=s[5], duration=s[6], fare=s[7]
+            ))
+        # B -> A
+        schedules_ba = generate_schedule(dest, src, duration_str=dur, base_fare=fare)
+        for s in schedules_ba:
+            all_rows.append(BusSchedule(
+                route_code=f"RV-{s[0]}", source=s[1], destination=s[2], bus_type=s[3],
+                departure_time=s[4], arrival_time=s[5], duration=s[6], fare=s[7]
+            ))
+
+    db.session.bulk_save_objects(all_rows)
+    db.session.commit()
+    print(f"[OK] Seeded {len(all_rows)} bus schedule entries!", flush=True)

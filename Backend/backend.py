@@ -335,22 +335,22 @@ def api_search_buses():
     Search the BusSchedule table.
     Query params: from, to, type (optional)
     """
-    from_loc = request.args.get("from", "RTC Complex")
+    from_loc = request.args.get("from", "").strip()
     to_loc   = request.args.get("to", "").strip()
     bus_type = request.args.get("type", "").strip()
 
-    q = BusSchedule.query.filter(
-        BusSchedule.source.ilike(f"%{from_loc}%")
-    )
+    query = BusSchedule.query
+    if from_loc:
+        query = query.filter(BusSchedule.source.ilike(f"%{from_loc}%"))
     if to_loc:
-        q = q.filter(BusSchedule.destination.ilike(f"%{to_loc}%"))
+        query = query.filter(BusSchedule.destination.ilike(f"%{to_loc}%"))
     if bus_type:
-        q = q.filter(BusSchedule.bus_type.ilike(f"%{bus_type}%"))
+        query = query.filter(BusSchedule.bus_type.ilike(f"%{bus_type}%"))
 
-    q = q.order_by(BusSchedule.departure_time.asc())
-    results = [b.to_dict() for b in q.all()]
+    buses = query.order_by(BusSchedule.departure_time.asc()).all()
+    results = [b.to_dict() for b in buses]
 
-    # Annotate each result with "minutes_until" based on current IST
+    # Annotate metadata (minutes until, running status)
     ist_now = get_ist_time()
     for r in results:
         try:
@@ -359,15 +359,21 @@ def api_search_buses():
             now_total  = now_h * 60 + now_m
             dep_total  = dep_h * 60 + dep_m
             diff = dep_total - now_total
-            if diff < 0:
-                diff += 1440  # next day
+            if diff < 0: diff += 1440
             r["minutes_until"] = diff
-            r["is_running"] = (0 <= dep_total - now_total <= int(r.get("duration_minutes", 60)))
-        except Exception:
+            r["is_running"] = (0 <= dep_total - now_total <= 60)
+        except:
             r["minutes_until"] = None
             r["is_running"] = False
 
     return jsonify(results)
+
+@app.route("/api/sources")
+@cache.cached(timeout=3600)
+def api_sources():
+    """Return list of unique starting locations."""
+    sources = db.session.query(BusSchedule.source).distinct().order_by(BusSchedule.source).all()
+    return jsonify([s[0] for s in sources])
 
 
 @app.route("/api/destinations")

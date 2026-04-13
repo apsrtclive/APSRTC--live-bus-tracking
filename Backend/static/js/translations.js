@@ -24,16 +24,17 @@ const translations = {
 
     // Search Section
     search_title: "Find Your Bus",
-    search_subtitle: "Visakhapatnam APSRTC — Real-time schedules from RTC Complex",
+    search_subtitle: "Visakhapatnam APSRTC — Real-time schedules between all major stations",
     from: "From",
     to: "To",
+    all_sources: "All Sources",
+    all_destinations: "All Destinations",
+    rtc_complex: "RTC Complex",
     departure: "Departure",
     arrival: "Arrival",
     duration: "Duration",
     bus_type: "Bus Type",
     search_btn: "Search",
-    all_destinations: "All Destinations",
-    rtc_complex: "RTC Complex",
     all_types: "All Types",
     results_title: "Search Results",
     no_results: "No buses found",
@@ -171,16 +172,17 @@ const translations = {
 
     // Search Section
     search_title: "మీ బస్సును కనుగొనండి",
-    search_subtitle: "విశాఖపట్నం APSRTC — RTC కాంప్లెక్స్ నుండి నిజ-సమయ షెడ్యూల్‌లు",
+    search_subtitle: "విశాఖపట్నం APSRTC — అన్ని ప్రధాన స్టేషన్ల మధ్య నిజ-సమయ షెడ్యూల్‌లు",
     from: "నుండి",
     to: "వరకు",
+    all_sources: "అన్ని మూలాలు",
+    all_destinations: "అన్ని గమ్యస్థానాలు",
+    rtc_complex: "RTC కాంప్లెక్స్",
     departure: "బయలుదేరే సమయం",
     arrival: "చేరే సమయం",
     duration: "వ్యవధి",
     bus_type: "బస్సు రకం",
     search_btn: "వెతకండి",
-    all_destinations: "అన్ని గమ్యస్థానాలు",
-    rtc_complex: "RTC కాంప్లెక్స్",
     all_types: "అన్ని రకాలు",
     results_title: "శోధన ఫలితాలు",
     no_results: "బస్సులు కనుగొనబడలేదు",
@@ -318,16 +320,17 @@ const translations = {
 
     // Search Section
     search_title: "अपनी बस खोजें",
-    search_subtitle: "विशाखापत्तनम APSRTC — RTC कॉम्प्लेक्स से रीयल-टाइम शेड्यूल",
+    search_subtitle: "विशाखापत्तनम APSRTC — सभी प्रमुख स्टेशनों के बीच रीयल-टाइम शेड्यूल",
     from: "से",
     to: "तक",
+    all_sources: "सभी स्रोत",
+    all_destinations: "सभी गंतव्य",
+    rtc_complex: "RTC कॉम्प्लेक्स",
     departure: "प्रस्थान",
     arrival: "आगमन",
     duration: "अवधि",
     bus_type: "बस प्रकार",
     search_btn: "खोजें",
-    all_destinations: "सभी गंतव्य",
-    rtc_complex: "RTC कॉम्प्लेक्स",
     all_types: "सभी प्रकार",
     results_title: "खोज परिणाम",
     no_results: "कोई बस नहीं मिली",
@@ -483,6 +486,7 @@ function applyLanguage(lang) {
 
   // Re-run dynamic loaders if present on the page
   if (typeof loadStats === 'function') loadStats();
+  if (typeof loadStations === 'function') loadStations();
   if (typeof loadDestinations === 'function') loadDestinations();
   if (typeof renderResults === 'function' && typeof allResults !== 'undefined') renderResults(allResults);
   if (typeof renderScheduleTable === 'function' && typeof schedData !== 'undefined') renderScheduleTable(schedData);

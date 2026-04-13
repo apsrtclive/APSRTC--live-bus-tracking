@@ -89,11 +89,13 @@
   <div id="section-search" class="admin-panel-section active">
     <div class="hero-panel">
       <div class="hero-title" data-i18n="search_title">🚌 Find Your Bus</div>
-      <div class="hero-subtitle" data-i18n="search_subtitle">Visakhapatnam APSRTC — Real-time schedules from RTC Complex</div>
+      <div class="hero-subtitle" data-i18n="search_subtitle">Visakhapatnam APSRTC — Real-time schedules between all major stations</div>
       <div class="search-row">
         <div class="form-group">
           <label class="form-label" data-i18n="from" for="fromSelect">From</label>
-          <select id="fromSelect" class="form-control"><option value="RTC Complex" data-i18n-option="rtc_complex">RTC Complex</option></select>
+          <select id="fromSelect" class="form-control" onchange="updateToStations(); searchBuses()">
+            <option value="RTC Complex" data-i18n-option="rtc_complex">RTC Complex</option>
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label" data-i18n="to" for="toSelect">To</label>
@@ -335,17 +337,28 @@ async function loadStats() {
   } catch(e){}
 }
 
-// ── Load Destinations ──────────────────────────────────
+// ── Load Stations ──────────────────────────────────
+let cachedSources = null;
 let cachedDests = null;
-async function loadDestinations() {
-  if (!cachedDests) {
-    try {
-      cachedDests = await (await fetch('/api/destinations')).json();
-    } catch(e) { return; }
-  }
-  const sel = document.getElementById('toSelect');
+
+async function loadStations() {
+  try {
+    const [srcs, dests] = await Promise.all([
+      fetch('/api/sources').then(r => r.json()),
+      fetch('/api/destinations').then(r => r.json())
+    ]);
+    cachedSources = srcs;
+    cachedDests = dests;
+    populateSelect('fromSelect', cachedSources, 'all_sources');
+    populateSelect('toSelect', cachedDests, 'all_destinations');
+    updateToStations(); // Filter TO based on default/current FROM
+  } catch(e) {}
+}
+
+function populateSelect(id, list, allKey) {
+  const sel = document.getElementById(id);
   const lang = localStorage.getItem('lang') || 'en';
-  const allDestLabel = (translations[lang] && translations[lang].all_destinations) || "All Destinations";
+  const allLabel = (translations[lang] && translations[lang][allKey]) || "All";
   
   const destDict = {
     'te': { 'Anakapalle': 'అనకాపల్లి', 'Bheemili': 'భీమిలి', 'Gajuwaka': 'గాజువాక', 'Kurmannapalem': 'కూర్మన్నపాలెం', 'Madhurawada': 'మధురవాడ', 'NAD Junction': 'ఎన్.ఎ.డి జంక్షన్', 'Pendurthi': 'పెందుర్తి', 'Rushikonda': 'రుషికొండ', 'Simhachalam': 'సింహాచలం', 'Steel Plant': 'స్టీల్ ప్లాంట్', 'RTC Complex': 'RTC కాంప్లెక్స్' },
@@ -353,27 +366,37 @@ async function loadDestinations() {
   };
   
   const currentVal = sel.value;
-  sel.innerHTML = `<option value="" data-i18n-option="all_destinations">${allDestLabel}</option>`;
-  cachedDests.forEach(d => { 
-    const o = document.createElement('option'); 
-    o.value = d; 
-    o.textContent = (destDict[lang] && destDict[lang][d]) ? destDict[lang][d] : d; 
-    sel.appendChild(o); 
+  sel.innerHTML = `<option value="" data-i18n-option="${allKey}">${allLabel}</option>`;
+  list.forEach(item => {
+    const o = document.createElement('option');
+    o.value = item;
+    o.textContent = (destDict[lang] && destDict[lang][item]) ? destDict[lang][item] : item;
+    sel.appendChild(o);
   });
   if (currentVal) sel.value = currentVal;
+}
+
+function updateToStations() {
+  const from = document.getElementById('fromSelect').value;
+  const toSel = document.getElementById('toSelect');
+  const currentTo = toSel.value;
+  if (!cachedDests) return;
+  populateSelect('toSelect', cachedDests.filter(d => d !== from), 'all_destinations');
+  if (currentTo !== from) toSel.value = currentTo;
 }
 
 // ── Bus Search ─────────────────────────────────────────
 let allResults = [];
 async function searchBuses() {
+  const from = document.getElementById('fromSelect').value;
   const to = document.getElementById('toSelect').value;
-  if (!to) { document.getElementById('promptState').style.display='flex'; document.getElementById('resultsSection').style.display='none'; return; }
+  if (!from && !to) { document.getElementById('promptState').style.display='flex'; document.getElementById('resultsSection').style.display='none'; return; }
   document.getElementById('promptState').style.display='none';
   document.getElementById('resultsSection').style.display='none';
   document.getElementById('emptyState').style.display='none';
   document.getElementById('loadingState').style.display='flex';
   try {
-    const params = new URLSearchParams({from:'RTC Complex', to});
+    const params = new URLSearchParams({from, to});
     const type = document.getElementById('typeSelect').value;
     if(type) params.append('type',type);
     allResults = await (await fetch('/api/buses?'+params)).json();
@@ -693,7 +716,7 @@ function showToast(msg, type='info') {
 
 // ── Init ───────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    loadDestinations();
+    loadStations();
     loadStats();
 });
 </script>
