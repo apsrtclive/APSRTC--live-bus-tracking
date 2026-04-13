@@ -59,12 +59,12 @@
     <h3 style="margin-bottom:1rem;" data-i18n="location_broadcast">📍 Location Broadcast</h3>
     <div class="coord-box" id="coordDisplay" data-i18n="broadcast_prompt">Press the button below to start sharing your location</div>
 
-    <div style="margin-top:1.25rem;display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
-      <div>
+    <div style="margin-top:1.25rem;display:flex;flex-wrap:wrap;gap:0.75rem;">
+      <div style="flex:1 1 140px;">
         <div class="form-label" style="margin-bottom:0.3rem;" data-i18n="speed_kmh">Speed (km/h)</div>
         <input type="number" id="speedInput" class="form-control" value="0" min="0" max="120" placeholder="0">
       </div>
-      <div>
+      <div style="flex:1 1 180px;">
         <div class="form-label" style="margin-bottom:0.3rem;" data-i18n="service_override">Service Override</div>
         <input type="text" id="serviceInput" class="form-control" placeholder="Auto-filled">
       </div>
@@ -72,7 +72,7 @@
 
     <div style="margin-top:1.25rem;display:flex;gap:0.75rem;flex-wrap:wrap;">
       <button class="location-btn" style="flex:1;" id="startBtn" onclick="startBroadcast()">
-        📡 <span data-i18n="start_broadcast">Start Broadcasting Location</span>
+        <span data-i18n="start_broadcast">Start Broadcasting Location</span>
       </button>
       <button class="btn btn-ghost" style="flex:0 0 auto;" id="stopBtn" onclick="stopBroadcast()" disabled data-i18n="stop_btn">Stop</button>
     </div>

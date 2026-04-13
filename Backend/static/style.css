@@ -809,9 +809,34 @@ select.form-control {
 }
 
 @media (max-width: 480px) {
-  .app-header { gap: 0.5rem; }
-  .lang-switcher { display: none; }
+  .app-header { gap: 0.5rem; padding: 0 0.75rem; }
+  .header-logo div div:first-child { font-size: 1rem; }
+  .header-subtitle { display: none; }
+  .lang-switcher { display: flex; transform: scale(0.9); margin-left: -5px; }
+  .lang-btn { padding: 0.2rem 0.35rem; font-size: 0.7rem; }
+  
+  .login-card, .location-card { padding: 1.5rem 1.25rem; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .bus-times { flex-wrap: wrap; }
   .bus-time { font-size: 1.2rem; }
+}
+
+/* ─── Captcha Container ────────────────────────────── */
+.captcha-container {
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  margin: 0.5rem 0;
+}
+
+@media (max-width: 350px) {
+  .captcha-container .g-recaptcha {
+    transform: scale(0.85);
+    transform-origin: 0 0;
+  }
+  .captcha-container {
+    height: 68px; /* Standard height 78 * 0.85 */
+    overflow: visible; /* Let it scale without clipping if needed */
+  }
 }
