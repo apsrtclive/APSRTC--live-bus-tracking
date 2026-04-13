@@ -80,7 +80,7 @@ CORS(app)
 # ── Global Template Version (Cache Busting) ──
 @app.context_processor
 def inject_version():
-    return {'v': '1.1.1'}
+    return {'v': '1.1.2'}
 
 # ═══════════════════════════════════════════════════════
 # DEMO DATA SEEDER (routes + stops + drivers)

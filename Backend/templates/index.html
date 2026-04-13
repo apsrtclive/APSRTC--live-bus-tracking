@@ -275,10 +275,18 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/static/service-worker.js')
       .then(reg => {
         console.log('[SW] Registered');
-        // Check for updates on every page load
         reg.update();
       })
       .catch(err => console.log('[SW] Registration failed:', err));
+  });
+
+  // Automatically reload when a new service worker takes control
+  let refreshing;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    console.log('[SW] Controller changed, reloading...');
+    window.location.reload();
   });
 }
 // ── Clock ──────────────────────────────────────────────

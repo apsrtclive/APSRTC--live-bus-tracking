@@ -12,6 +12,12 @@
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/static/service-worker.js').then(reg => reg.update());
     });
+    let refreshing;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
   }
   </script>
   <style>
