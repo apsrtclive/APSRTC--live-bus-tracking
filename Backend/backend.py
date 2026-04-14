@@ -119,8 +119,8 @@ def _seed_demo_drivers():
 
     # A reusable stop generator with real coords
     def get_coords(name):
-        res = STOP_COORDINATES.get(name, {"lat": 17.7, "lon": 83.3})
-        return res["lat"], res["lon"]
+        res = STOP_COORDINATES.get(name, {"lat": 17.7, "lng": 83.3})
+        return res["lat"], res.get("lng", res.get("lon", 83.3))
 
     DEMO = [
         {
