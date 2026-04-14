@@ -29,22 +29,29 @@ from models import db, Route, Service, Vehicle, Stop, TimetableEntry, Driver, Us
 load_dotenv()
 
 STOP_COORDINATES = {
-    "RTC Complex":        {"lat": 17.7231, "lng": 83.3012},
-    "Jagadamba Junction": {"lat": 17.7123, "lng": 83.3050},
-    "Maharani Peta":      {"lat": 17.7034, "lng": 83.2978},
-    "MVP Colony":         {"lat": 17.7425, "lng": 83.3389},
-    "Gajuwaka":           {"lat": 17.7004, "lng": 83.2168},
-    "NAD Junction":       {"lat": 17.7445, "lng": 83.2382},
-    "Steel Plant":        {"lat": 17.6542, "lng": 83.1961},
-    "Simhachalam":        {"lat": 17.7665, "lng": 83.2505},
-    "Pendurthi":          {"lat": 17.8012, "lng": 83.2156},
-    "Kurmannapalem":      {"lat": 17.6980, "lng": 83.1595},
-    "Madhurawada":        {"lat": 17.8225, "lng": 83.3522},
-    "Bheemili":           {"lat": 17.8897, "lng": 83.4563},
-    "Anakapalle":         {"lat": 17.6912, "lng": 82.9987},
-    "Rushikonda":         {"lat": 17.7823, "lng": 83.3912},
-    "Dwaraka Nagar":      {"lat": 17.7282, "lng": 83.3081},
-    "Siripuram Junction": {"lat": 17.7204, "lng": 83.3168},
+    "RTC Complex":           {"lat": 17.7231, "lng": 83.3156},
+    "Jagadamba Junction":    {"lat": 17.7198, "lng": 83.3089},
+    "Dwaraka Nagar":         {"lat": 17.7265, "lng": 83.3178},
+    "Seethammadhara":        {"lat": 17.7389, "lng": 83.3201},
+    "NAD Junction":          {"lat": 17.7456, "lng": 83.2934},
+    "Ukkunagaram":           {"lat": 17.7312, "lng": 83.2234},
+    "Siripuram":             {"lat": 17.7198, "lng": 83.3023},
+    "Old Town":              {"lat": 17.7089, "lng": 83.2978},
+    "Kommadi":               {"lat": 17.7812, "lng": 83.3734},
+    "Madhurawada":           {"lat": 17.7840, "lng": 83.3721},
+    "Kapuluppada":           {"lat": 17.7923, "lng": 83.3456},
+    "Pendurthi":             {"lat": 17.8012, "lng": 83.2156},
+    "Gajuwaka":              {"lat": 17.6820, "lng": 83.2054},
+    "Steel Plant":           {"lat": 17.6925, "lng": 83.1734},
+    "Simhachalam":           {"lat": 17.7650, "lng": 83.2712},
+    "Kurmannapalem":         {"lat": 17.7198, "lng": 83.2367},
+    "Rushikonda":            {"lat": 17.7823, "lng": 83.3912},
+    "Bheemili":              {"lat": 17.8897, "lng": 83.4563},
+    "Anakapalle":            {"lat": 17.6912, "lng": 82.9987},
+    "Maharani Peta":         {"lat": 17.7034, "lng": 83.2978},
+    "MVP Colony":            {"lat": 17.7342, "lng": 83.3012},
+    "Boyapalem":             {"lat": 17.8123, "lng": 83.2345},
+    "Bheemunipatnam":        {"lat": 17.8934, "lng": 83.4512},
 }
 
 # ═══════════════════════════════════════════════════════
@@ -245,9 +252,9 @@ with app.app_context():
 # This block wipes and re-seeds once to apply exact GPS coordinates
 with app.app_context():
     try:
-        # Check if we have the "precision" RTC coordinate (17.7231)
+        # Check if we have the new "precision" RTC coordinate (lng: 83.3156)
         # If not, wipe and re-seed to apply it.
-        has_new_coords = Stop.query.filter_by(stop_name='RTC Complex', lat=17.7231).count() > 0
+        has_new_coords = Stop.query.filter_by(stop_name='RTC Complex', lng=83.3156).count() > 0
         if Stop.query.count() > 0 and not has_new_coords:
             print("[RESET] Wiping demo tables to apply precision GPS coordinates...", flush=True)
             db.session.query(LiveLocation).delete()
@@ -524,10 +531,27 @@ def timetable():
 
 @app.route("/api/live/<service_no>")
 def live_tracking(service_no):
-    res = db.session.query(LiveLocation).join(Vehicle).join(Service).filter(Service.service_no == service_no).first()
-    if not res:
+    loc = db.session.query(LiveLocation).join(Vehicle).join(Service).filter(Service.service_no == service_no).first()
+    if not loc:
+        first_stop = db.session.query(Stop).join(Route).join(Service)\
+            .filter(Service.service_no == service_no)\
+            .order_by(Stop.stop_order.asc()).first()
+        if first_stop:
+            return jsonify({
+                "lat": first_stop.lat,
+                "lng": first_stop.lng,
+                "speed": 0,
+                "updated_at": "Not yet updated",
+                "status": "Waiting"
+            })
         return jsonify({"error": "Live data not found"}), 404
-    return jsonify({"lat": res.lat, "lng": res.lng, "speed": res.speed, "updated_at": res.updated_at})
+    return jsonify({
+        "lat": loc.lat,
+        "lng": loc.lng,
+        "speed": loc.speed or 0,
+        "updated_at": str(loc.updated_at),
+        "status": "Live"
+    })
 
 
 @app.route("/api/route_details/<service_no>")
@@ -622,9 +646,20 @@ def api_live_tracking(service_no):
         res["live"] = {
             "lat": loc.lat, 
             "lng": loc.lon if hasattr(loc, 'lon') else loc.lng, # handles both naming conventions
-            "speed": loc.speed, 
-            "updated_at": loc.updated_at
+            "speed": loc.speed or 0, 
+            "updated_at": str(loc.updated_at),
+            "status": "Live"
         }
+    else:
+        first_stop = stops[0] if stops else None
+        if first_stop:
+            res["live"] = {
+                "lat": first_stop.lat,
+                "lng": first_stop.lng,
+                "speed": 0,
+                "updated_at": "Not yet updated",
+                "status": "Waiting"
+            }
     
     return jsonify(res)
 

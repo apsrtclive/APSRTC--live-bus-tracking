@@ -16,10 +16,16 @@
     #liveMap { height: 460px; border-radius: var(--radius); border: 1px solid var(--border); z-index: 0; }
     .live-grid { display: grid; grid-template-columns: 1fr 300px; gap: 1rem; }
     @media(max-width:900px) { .live-grid { grid-template-columns: 1fr; } #liveMap { height: 320px; } }
-    .stop-row { display:flex; gap:0.5rem; align-items:center; padding:0.4rem 0; border-bottom:1px solid var(--border); }
-    .stop-num { width:22px;height:22px;background:var(--blue);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0; }
-    .pulse-dot { display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--success);animation:blink 1.2s ease infinite; }
-    @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+    .stop-item { display:flex; gap:0.75rem; align-items:center; padding:0.6rem 0; border-bottom:1px solid var(--border); position: relative; }
+    .stop-number { width:24px;height:24px;background:var(--blue);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;flex-shrink:0; font-weight: 600; z-index: 2; border: 2px solid var(--blue); }
+    .stop-name { font-size: 0.9rem; font-weight: 500; }
+    .stop-connector { position: absolute; left: 11px; top: 32px; width: 2px; height: calc(100% - 10px); background: var(--blue); z-index: 1; }
+    
+    @keyframes pulse-green {
+        0%   { box-shadow: 0 0 0 0 rgba(0, 200, 83, 0.7); }
+        70%  { box-shadow: 0 0 0 10px rgba(0, 200, 83, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(0, 200, 83, 0); }
+    }
   </style>
 </head>
 <body>
@@ -432,6 +438,20 @@ function typeBadge(t) {
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
+// Check OSRM connectivity on initialization
+async function testOSRM() {
+    try {
+        const test = await fetch(
+            'https://router.project-osrm.org/route/v1/driving/83.3156,17.7231;83.2156,17.8012?overview=full&geometries=geojson'
+        );
+        const data = await test.json();
+        console.log('OSRM test:', data.code); // Should log 'Ok'
+    } catch(e) {
+        console.error('OSRM unreachable:', e);
+    }
+}
+testOSRM();
+
 let activeFilter='';
 function filterType(t) {
   activeFilter=t;
@@ -494,49 +514,92 @@ const busIcon = L.divIcon({
 });
 
 async function drawRoadRoute(stops) {
-    // Remove old route
-    if (window.routeLayer) liveMap.removeLayer(window.routeLayer);
+    // Clear ALL existing layers except tile layer
+    liveMap.eachLayer(layer => {
+        if (!(layer instanceof L.TileLayer)) {
+            liveMap.removeLayer(layer);
+        }
+    });
 
-    // Build coordinate string for OSRM: lng,lat;lng,lat
-    const coords = stops.map(s => `${s.lng},${s.lat}`).join(';');
-    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+    // Validate stops have real coordinates
+    const validStops = stops.filter(s =>
+        s.lat && s.lng &&
+        s.lat !== 0 && s.lng !== 0 &&
+        !isNaN(s.lat) && !isNaN(s.lng)
+    );
+
+    if (validStops.length < 2) {
+        console.error('Not enough valid stops:', validStops);
+        return;
+    }
+
+    // OSRM needs lng,lat order
+    const coords = validStops.map(s => `${s.lng},${s.lat}`).join(';');
+    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true`;
+
+    console.log('Fetching OSRM route:', osrmUrl);
 
     let roadPoints;
     try {
-        const res = await fetch(url);
+        const res = await fetch(osrmUrl);
         const data = await res.json();
-        // Convert [lng,lat] to [lat,lng] for Leaflet
-        roadPoints = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-        window.currentRoadPoints = roadPoints; // For bus animation
+        console.log('OSRM response:', data.code);
+
+        if (data.code === 'Ok') {
+            // IMPORTANT: OSRM returns [lng, lat] — swap to [lat, lng] for Leaflet
+            roadPoints = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+            console.log('Road points loaded:', roadPoints.length);
+            window.currentRoadPoints = roadPoints; // For bus animation
+        } else {
+            throw new Error('OSRM returned: ' + data.code);
+        }
     } catch(e) {
-        // If OSRM fails, fall back to straight lines
-        console.error('OSRM Routing Failed:', e);
-        roadPoints = stops.map(s => [s.lat, s.lng]);
+        console.warn('OSRM failed, using straight lines:', e);
+        roadPoints = validStops.map(s => [s.lat, s.lng]);
         window.currentRoadPoints = roadPoints;
     }
 
-    // Draw thick highlighted road like Google Maps
-    window.routeLayer = L.featureGroup([
-        // Dark border underneath
-        L.polyline(roadPoints, {
-            color: '#1A56A4',
-            weight: 12,
-            opacity: 0.4,
-            lineJoin: 'round',
-            lineCap: 'round'
-        }),
-        // Bright blue road on top
-        L.polyline(roadPoints, {
-            color: '#4285F4',
-            weight: 7,
-            opacity: 1,
-            lineJoin: 'round',
-            lineCap: 'round'
-        })
-    ]).addTo(liveMap);
+    // Draw route — thick blue highlighted road
+    L.polyline(roadPoints, {
+        color: '#1A56A4',
+        weight: 12,
+        opacity: 0.35,
+        lineJoin: 'round',
+        lineCap: 'round'
+    }).addTo(liveMap);
 
-    liveMap.fitBounds(window.routeLayer.getBounds(), {padding: [50,50]});
+    L.polyline(roadPoints, {
+        color: '#4285F4',
+        weight: 7,
+        opacity: 1,
+        lineJoin: 'round',
+        lineCap: 'round'
+    }).addTo(liveMap);
+
+    // Add stop markers back after clearing layers
+    stopMarkers = [];
+    validStops.forEach((stop, i) => {
+        const isFirst = i === 0;
+        const isLast = i === validStops.length - 1;
+        const color = isFirst ? '#00C853' : isLast ? '#D50000' : '#1a3a6b';
+        const size = (isFirst || isLast) ? 16 : 12;
+
+        const m = L.circleMarker([stop.lat, stop.lng], {
+            radius: size / 2,
+            fillColor: color,
+            color: '#ffffff',
+            weight: 2,
+            fillOpacity: 1
+        }).bindPopup(`<b>${stop.name || stop.stop_name}</b>`).addTo(liveMap);
+        stopMarkers.push(m);
+    });
+
+    liveMap.fitBounds(
+        L.latLngBounds(roadPoints),
+        { padding: [50, 50] }
+    );
 }
+
 
 function createStopMarker(stop, isFirst, isLast, isCurrent) {
     const size = isCurrent ? 22 : 16;
@@ -563,6 +626,49 @@ function createStopMarker(stop, isFirst, isLast, isCurrent) {
 
     return L.marker([stop.lat, stop.lng], { icon })
         .bindPopup(`<b>${stop.name}</b>`);
+}
+
+function getCurrentStopIndex(stops, busLat, busLng) {
+    let nearest = 0;
+    let minDist = Infinity;
+    stops.forEach((stop, index) => {
+        const dist = Math.sqrt(Math.pow(stop.lat - busLat, 2) + Math.pow(stop.lng - busLng, 2));
+        if (dist < minDist) {
+            minDist = dist;
+            nearest = index;
+        }
+    });
+    return nearest;
+}
+
+function updateStopColors(stops, currentStopIndex) {
+    const stopItems = document.querySelectorAll('.stop-item');
+    stopItems.forEach((item, index) => {
+        const circle = item.querySelector('.stop-number');
+        const connector = item.querySelector('.stop-connector');
+
+        if (index < currentStopIndex) {
+            // Already passed — solid green
+            circle.style.background = '#00C853';
+            circle.style.border = '2px solid #00C853';
+            circle.innerHTML = '✓';
+            if (connector) connector.style.background = '#00C853';
+        } else if (index === currentStopIndex) {
+            // Current stop — pulsing green
+            circle.style.background = '#00C853';
+            circle.style.border = '2px solid #00C853';
+            circle.style.animation = 'pulse-green 1.5s infinite';
+            circle.innerHTML = index + 1;
+            if (connector) connector.style.background = '#1a3a6b';
+        } else {
+            // Upcoming — keep dark blue
+            circle.style.background = '#1a3a6b';
+            circle.style.border = '2px solid #1a3a6b';
+            circle.style.animation = 'none';
+            circle.innerHTML = index + 1;
+            if (connector) connector.style.background = '#1a3a6b';
+        }
+    });
 }
 
 function animateBusOnRoad(fromPoint, toPoint, roadPoints, duration = 2000) {
@@ -642,24 +748,22 @@ async function loadRouteStops(svc) {
     if (!data || data.error) return;
 
     const stops = data.stops;
+    console.log('Stops received:', stops);
     
     // Render stops list
     document.getElementById('stopsCard').style.display = 'block';
+    window.currentRouteStops = stops; // Store for color updates
     document.getElementById('stopsContent').innerHTML = stops.map((s,i) =>
-      `<div class="stop-row">
-         <div class="stop-num">${i+1}</div>
-         <div>${s.name}</div>
+      `<div class="stop-item">
+         <div class="stop-number">${i+1}</div>
+         <div class="stop-name">${s.name}</div>
+         ${i < stops.length - 1 ? '<div class="stop-connector"></div>' : ''}
        </div>`
     ).join('');
 
-    // Draw road-accurate route
+    // Draw road-accurate route (this also adds stop markers via Leaflet)
     await drawRoadRoute(stops);
 
-    // Draw styled stop markers
-    stops.forEach((s, i) => {
-      const m = createStopMarker(s, i===0, i===stops.length-1, false).addTo(liveMap);
-      stopMarkers.push(m);
-    });
   } catch(e) { console.error('loadRouteStops error:', e); }
 }
 
@@ -689,6 +793,12 @@ async function fetchLiveLocation(svc) {
 
     // Animate bus position along road
     animateBusOnRoad(fromPoint, [lat, lng], window.currentRoadPoints);
+
+    // Update stop list colors based on current position
+    if (window.currentRouteStops) {
+      const currentIndex = getCurrentStopIndex(window.currentRouteStops, lat, lng);
+      updateStopColors(window.currentRouteStops, currentIndex);
+    }
 
     const speedLabel = translations[lang].speed || "Speed";
     const updatedLabel = translations[lang].updated || "Updated";
